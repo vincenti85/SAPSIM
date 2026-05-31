@@ -2546,10 +2546,19 @@ function App() {
     { id:'pp', label:tabLabels[2], icon:'🏭' },
     { id:'fico', label:tabLabels[3], icon:'🧮' },
     { id:'sd', label:tabLabels[4], icon:'💵' },
-    { id:'ledger', label:tabLabels[5], icon:'' },
+    { id:'ledger', label:tabLabels[5], icon:'📒' },
     { id:'dryrun', label:'Dryrun', icon:'📊' },
-    { id:'copa', label:'CO-PA', icon:'📈' },
+    { id:'copa', label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
   ];
+
+  const TAB_GROUPS = [
+    { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
+    { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
+    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['ledger','fico','copa'] },
+    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun'] },
+  ];
+  const activeGroup = TAB_GROUPS.find(g => g.tabIds.includes(activeTab)) || TAB_GROUPS[0];
+  const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
 
   return (
     <div className="min-h-screen">
@@ -2572,8 +2581,22 @@ function App() {
               {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
             </button>
           </div>
-          <nav className="flex gap-1 mt-3 flex-wrap">
-            {tabs.map(t => (
+          {/* Group Nav (Top Level) */}
+          <nav className="flex gap-1 mt-3">
+            {TAB_GROUPS.map(g => (
+              <button key={g.id}
+                onClick={() => setActiveTab(g.tabIds[0])}
+                className={`px-5 py-1.5 text-xs font-bold rounded-t transition-all tracking-wide
+                  ${activeGroup.id===g.id
+                    ? 'bg-indigo-500 text-white shadow-sm'
+                    : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'}`}>
+                {g.icon} {g.label}
+              </button>
+            ))}
+          </nav>
+          {/* Sub-Tab Nav */}
+          <nav className="flex gap-1 flex-wrap border-t border-white/10 pt-0.5">
+            {activeGroupTabs.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
                 className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-all
                   ${activeTab===t.id ? 'bg-slate-100 text-slate-800' : 'bg-white/10 text-white hover:bg-white/20'}`}>

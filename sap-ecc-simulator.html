@@ -19,7 +19,9 @@
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useMemo } = React;
+const { useState, useMemo, useRef } = React;
+
+const APP_PIN = '__SAP_PIN__';
 
 /* =========================================================================
    DEFAULT MASTER DATA
@@ -2447,6 +2449,36 @@ function App() {
 
   const openPopup = (data) => { setPopupData(data); setShowPopup(true); };
 
+  /* ---- PIN Gate ---- */
+  const [unlocked, setUnlocked] = useState(false);
+  const [pinDigits, setPinDigits] = useState(['','','','']);
+  const [pinError, setPinError] = useState(false);
+  const pinContainerRef = useRef(null);
+
+  const focusPin = (i) => {
+    const inputs = pinContainerRef.current?.querySelectorAll('input');
+    inputs?.[i]?.focus();
+  };
+  const handlePinInput = (i, val) => {
+    if (!/^\d*$/.test(val)) return;
+    const next = [...pinDigits];
+    next[i] = val.slice(-1);
+    setPinDigits(next);
+    setPinError(false);
+    if (val && i < 3) focusPin(i + 1);
+    if (next.every(d => d !== '')) {
+      if (next.join('') === APP_PIN) {
+        setUnlocked(true);
+      } else {
+        setPinError(true);
+        setTimeout(() => { setPinDigits(['','','','']); setPinError(false); focusPin(0); }, 700);
+      }
+    }
+  };
+  const handlePinKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !pinDigits[i] && i > 0) focusPin(i - 1);
+  };
+
   const [mmSteps, setMmSteps] = useState({ me21n:false, migo_gr:false, miro:false, f53:false });
   const [ppSteps, setPpSteps] = useState({
     co01_h:false, gi_h:false, co11n_h:false, gr_h:false,
@@ -2587,14 +2619,39 @@ function App() {
               {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
             </button>
           </div>
+          {/* PIN Row (above Group Nav) */}
+          <div className="mt-2 flex items-center gap-2 border-b border-white/10 pb-2">
+            {unlocked ? (
+              <span className="text-xs text-green-300 flex items-center gap-1.5">
+                <span>✅</span>
+                <span>{lang==='ko' ? '인증 완료 — 전체 메뉴 활성화' : 'Authenticated — Full access'}</span>
+              </span>
+            ) : (
+              <div className="flex items-center gap-2" ref={pinContainerRef}>
+                <span className="text-xs text-slate-300">🔐 PIN:</span>
+                {pinDigits.map((d, i) => (
+                  <input key={i} type="password" inputMode="numeric" maxLength={1} value={d}
+                    onChange={e => handlePinInput(i, e.target.value)}
+                    onKeyDown={e => handlePinKeyDown(i, e)}
+                    className={`w-8 h-8 text-center text-sm font-bold rounded border-2 bg-slate-700 text-white outline-none transition-colors
+                      ${pinError ? 'border-red-400 bg-red-900/40 animate-pulse' : 'border-slate-500 focus:border-indigo-400'}`}
+                  />
+                ))}
+                <span className="text-xs text-slate-400">{lang==='ko' ? '4자리 입력' : 'Enter 4 digits'}</span>
+                {pinError && <span className="text-xs text-red-400 font-semibold">❌</span>}
+              </div>
+            )}
+          </div>
           {/* Group Nav (Top Level) */}
-          <nav className="flex gap-1 mt-3">
+          <nav className="flex gap-1 mt-2">
             {TAB_GROUPS.map(g => (
               <button key={g.id}
-                onClick={() => setActiveTab(g.tabIds[0])}
+                onClick={() => unlocked && setActiveTab(g.tabIds[0])}
+                disabled={!unlocked}
                 className={`px-5 py-1.5 font-bold rounded-t transition-all tracking-wide
                   ${g.id==='grp_ledger' ? 'text-[0.825rem]' : 'text-xs'}
-                  ${activeGroup.id===g.id
+                  ${!unlocked ? 'opacity-40 cursor-not-allowed' : ''}
+                  ${activeGroup.id===g.id && unlocked
                     ? 'bg-indigo-500 text-white shadow-sm'
                     : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'}`}>
                 {g.icon} {g.label}
@@ -2614,7 +2671,18 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-5">
+      <main className="max-w-7xl mx-auto px-4 py-5 relative">
+        {!unlocked && (
+          <div className="absolute inset-0 bg-slate-100/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-lg" style={{minHeight:'300px'}}>
+            <div className="text-6xl mb-4">🔐</div>
+            <p className="text-base font-semibold text-slate-600">
+              {lang==='ko' ? 'PIN을 입력하면 메뉴가 활성화됩니다' : 'Enter PIN above to activate the menu'}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {lang==='ko' ? '상단의 4자리 PIN 입력란을 이용하세요' : 'Use the 4-digit PIN field at the top'}
+            </p>
+          </div>
+        )}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} lang={lang} />}
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} />}
         {activeTab==='pp' && <PPTab ppSteps={ppSteps} setPpSteps={setPpSteps} openPopup={openPopup} ppInv={ppInv} wip={wip} ppVar={ppVar} lang={lang} />}

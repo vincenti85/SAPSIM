@@ -1,0 +1,2609 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SAP ECC Simulator — ABC Auto Parts Inc.</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .border-l-3 { border-left-width: 3px; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+</style>
+</head>
+<body class="bg-slate-100">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+/* =========================================================================
+   DEFAULT MASTER DATA
+   ========================================================================= */
+const DEFAULT_MATERIALS = [
+  { MaterialCode:'FERT001', Description:'Engine Mount Bracket', MaterialType:'FERT', StandardPrice:'45.00', UOM:'EA', BOMLevel:'0', ParentMaterial:'',        Quantity:'' },
+  { MaterialCode:'HALB001', Description:'Bracket Frame',        MaterialType:'HALB', StandardPrice:'18.00', UOM:'EA', BOMLevel:'1', ParentMaterial:'FERT001', Quantity:'1' },
+  { MaterialCode:'ROH001',  Description:'Aluminum Sheet',       MaterialType:'ROH',  StandardPrice:'5.50',  UOM:'KG', BOMLevel:'2', ParentMaterial:'HALB001', Quantity:'3' },
+  { MaterialCode:'ROH002',  Description:'Steel Rod',            MaterialType:'ROH',  StandardPrice:'3.20',  UOM:'KG', BOMLevel:'2', ParentMaterial:'HALB001', Quantity:'1' },
+  { MaterialCode:'ROH001',  Description:'Aluminum Sheet',       MaterialType:'ROH',  StandardPrice:'5.50',  UOM:'KG', BOMLevel:'1', ParentMaterial:'FERT001', Quantity:'0.5' },
+];
+
+const COMPANY = { code:'US01', name:'ABC Auto Parts Inc.', plant:'P001', plantName:'Alabama Manufacturing Plant' };
+const VENDOR   = { code:'V001', name:'Alcoa Aluminum Supply' };
+const CUSTOMER = { code:'C001', name:'Ford Motor Company' };
+
+const REQUIRED_CSV_COLS = ['MaterialCode','Description','MaterialType','StandardPrice','UOM','BOMLevel','ParentMaterial','Quantity'];
+
+/* =========================================================================
+   TRANSLATION DICTIONARY (C-2: KO/EN toggle)
+   Only core labels are translated; T-codes & SAP technical terms stay as-is.
+   ========================================================================= */
+const T = {
+  ko: {
+    tabs: ['마스터/BOM','MM 구매','PP 생산','FI/CO 원가','SD 매출','📒 분개원장'],
+    masterGuideTitle: '마스터데이터 & BOM 운용 가이드',
+    mmGuideTitle: 'MM 구매 프로세스 운용 가이드',
+    ppGuideTitle: 'PP 생산 프로세스 운용 가이드',
+    ficoGuideTitle: 'FI/CO 원가 결산 운용 가이드',
+    sdGuideTitle: 'SD 매출 프로세스 운용 가이드',
+    csvTitle: '📦 CSV 자재 업로드',
+    csvBtn: 'CSV 선택',
+    csvReset: '기본값 복원',
+    bomTitle: '🌳 멀티레벨 BOM 트리',
+    rollupTitle: '💰 원가 롤업 (Bottom-up)',
+    stdCostTitle: '📊 표준원가 계산 사이클 (KP26 → CK11N → CK24)',
+    stdCostResult: '📊 표준원가 계산 결과',
+    invTable: '📦 재고 현황',
+    diffTable: '📊 차이 / 잔액',
+    wipTable: '🔧 WIP (오더별 누적원가)',
+    diffStatus: '📊 차이 현황',
+    copaTitle: '📈 CO-PA 수익성 분석',
+    closeStatus: '🔵 결산 진행 상태',
+    ledgerTitle: '전체 분개 원장',
+    printBtn: '🖨️ 인쇄',
+    balTitle: '주요 계정 잔액',
+    plTitle: '엔드투엔드 손익',
+    arTitle: '📋 판매 현황',
+    finInv: '완제품 재고',
+    salesRev: '매출 / 잔액',
+    colMat: '자재',
+    colQty: '수량',
+    colAmt: '금액',
+    colUP: '단가',
+    colCode: '코드',
+    colDesc: '설명',
+    colType: '유형',
+    colStd: '표준가',
+    colUnit: '단위',
+    colStatus: '상태',
+    colCalc: '계산가',
+    colCurr: '현재 표준가',
+    journalBtn: '분개',
+    guideExpand: '▼ 펼치기',
+    guideCollapse: '▲ 접기',
+    footerFlow: '탭 간 데이터 연결: MM 입고 → PP 출고 → PP 완제품 → SD 출고 / FI/CO 결산 → SD 실제 손익',
+    stdCostDesc: '액티비티 단가 계획(KP26) → 하위 레벨(HALB001) 표준원가 계산/릴리즈 → 상위 레벨(FERT001) 계산/릴리즈 순서로 진행합니다.',
+    btnKP26: 'KP26 — 액티비티 단가 계획 입력',
+    btnCK11N_H: 'CK11N — HALB001 표준원가 계산',
+    btnCK24_H: 'CK24 — HALB001 표준원가 릴리즈',
+    btnCK11N_F: 'CK11N — FERT001 표준원가 계산',
+    btnCK24_F: 'CK24 — FERT001 표준원가 릴리즈',
+    stdNotReleased: '미릴리즈',
+    stdReleased: '✅ 릴리즈',
+    rollupMat: '(자재비)',
+    mmScenTitle: 'MM 구매 시나리오',
+    mmScenDesc: 'Vendor V001 (Alcoa Aluminum Supply) 로부터 ROH001 Aluminum Sheet 100KG 구매. 발주가 $5.00/KG, 표준가 $5.50/KG → 입고 시 구매가격차이 발생.',
+    btnME21N: 'ME21N — PO 생성',
+    btnMIGO_GR: 'MIGO (101) — 입고',
+    btnMIRO: 'MIRO — 송장검증',
+    btnF53: 'F-53 — 지급',
+    labelPPV: '구매가격차이 (PPV)',
+    labelAP: 'AP-V001 잔액',
+    retTitle: '🔄 반품 시나리오 (Vendor Return)',
+    retDesc: 'ROH001 20KG를 공급업체에 반품합니다 (이동유형 122). 입고(101)의 반대 처리로 재고가 감소합니다.',
+    btnRetPO: 'ME21N — 반품 PO 생성 (Return PO)',
+    btnRetMIGO: 'MIGO (122) — 공급업체 반품',
+    miTitle: '🔍 재고실사 (Physical Inventory)',
+    miDesc: '실사문서 생성 → 실사 입력 → 차이 전기 순서로 진행합니다. 장부수량과 실물수량의 차이를 감모손실로 계상합니다.',
+    btnMI01: 'MI01 — 실사문서 생성',
+    btnMI04: 'MI04 — 실사 입력',
+    btnMI07: 'MI07 — 실사 전기',
+    ppPhase1Title: 'PP 생산 — Phase 1: 반제품 HALB001 (20EA)',
+    ppPhase2Title: 'PP 생산 — Phase 2: 완성품 FERT001 (10EA)',
+    ppPhase2Lock: '⚠️ Phase 1 완료 후 활성화됩니다',
+    ppSettleTitle: '⚖️ 오더 정산 (KO88)',
+    btnCO01_H: 'CO01 — 생산오더 생성 (HALB001 20EA)',
+    btnGI_H: 'MIGO (261) — 원재료 출고',
+    btnCO11N_H: 'CO11N — 생산 확정 (노무20h/기계10h)',
+    btnGR_H: 'MIGO (101) — 반제품 입고',
+    btnCO01_F: 'CO01 — 완성품 생산오더 (FERT001 10EA)',
+    btnGI_F: 'MIGO (261) — 반제품/원재료 출고',
+    btnCO11N_F: 'CO11N — 완성품 확정 (노무5h/기계2.5h)',
+    btnGR_F: 'MIGO (101) — 완성품 입고',
+    btnKO88_H: 'KO88 (HALB001) — 정산',
+    btnKO88_F: 'KO88 (FERT001) — 정산',
+    wipHALB: 'HALB001 오더 WIP',
+    wipFERT: 'FERT001 오더 WIP',
+    varHALB: 'HALB001 정산차이',
+    varFERT: 'FERT001 정산차이',
+    ficoCardTitle: 'FI/CO 원가 — Material Ledger 결산',
+    btnKSS2: 'KSS2 — Activity 단가 재평가',
+    btnSL_ROH: 'CKMLCP (SL-ROH) — 원자재 단일레벨',
+    btnSL_HALB: 'CKMLCP (SL-HALB) — 반제품 단일레벨',
+    btnML: 'CKMLCP (ML) — 완성품 다중레벨 롤업',
+    btnPC: 'CKMLCP (PC) — 결산전기',
+    btnKE27: 'KE27 — CO-PA 실제전기',
+    ckm3ROH: 'CKM3 — ROH001 (원자재)',
+    ckm3HALB: 'CKM3 — HALB001 (반제품)',
+    ckm3FERT: 'CKM3 — FERT001 (완성품)',
+    ckm3Cat: '구분',
+    ckm3Prelim: '예비평가',
+    ckm3Var: '차이',
+    ckm3Opening: '기초',
+    ckm3Receipt: '입고',
+    ckm3Cumul: '누계',
+    ckm3Consump: '소비',
+    ckm3Closing: '기말',
+    copaRevenue: '매출액',
+    copaCOGS: '매출원가 (표준)',
+    copaStdMargin: '표준마진',
+    copaMLAdj: 'ML 원가조정',
+    copaActMargin: '실제마진',
+    settleProg1: 'Activity 단가 재평가',
+    settleProg2: 'ROH 단일레벨 배부',
+    settleProg3: 'HALB 단일레벨 배부',
+    settleProg4: '다중레벨 롤업',
+    settleProg5: '결산 전기',
+    settleProg6: 'CO-PA 실제전기',
+    mr21CardTitle: '🔄 자재 재평가 (MR21 — Material Revaluation)',
+    mr21Desc: 'HALB001 재고 10EA를 구 표준가($18)에서 신 표준가($41.375)로 재평가합니다. 차이는 재고재평가손익으로 계상됩니다.',
+    btnMR21: 'MR21 — HALB001 표준원가 재평가',
+    mr21Result: 'MR21 재평가 결과',
+    mr21OldStd: '구 표준가',
+    mr21NewStd: '신 표준가',
+    mr21Diff: '재평가 차이',
+    mmConnBadge: 'ROH001 구매가격차이(PPV) {ppv} 가 ML 결산의 ROH001 차이에 포함됩니다.',
+    ficoFlow1: '📦 MM PPV: -$50.00 (유리) → ROH001 차이에 반영',
+    ficoFlow2: '🏭 PP HALB 차이: +$467.50 (불리) → HALB001 → FERT001 롤업',
+    ficoFlow3: '🏭 PP FERT 차이: -$30.00 (유리) → FERT001 자체 차이',
+    ficoFlow4: '📊 최종 COGS 조정: +$101.875 (불리) → 실제마진 56.4%',
+    sdScenTitle: 'SD 매출 시나리오',
+    sdScenDesc: 'Customer C001 (Ford Motor Company) 에게 FERT001 5EA @ $150 판매 (총 $750).',
+    btnVA01: 'VA01 — Sales Order 생성',
+    btnVL01N: 'VL01N — 출하 (Goods Issue)',
+    btnVF01: 'VF01 — 청구 (Billing)',
+    btnF28: 'F-28 — 수취 (Incoming Payment)',
+    labelRevenue: '매출액 (인식)',
+    labelAR: 'AR-C001 잔액',
+    plTitle2: '🏁 최종 손익 비교 (표준 vs 실제)',
+    plCat: '구분',
+    plStd: '표준',
+    plAct: '실제',
+    plRevenue: '매출액',
+    plCOGS: '매출원가',
+    plGP: '매출총이익',
+    plNote: '⚠️ FI/CO 탭의 CKMLCP(PC) 결산을 완료하면 실제 매출원가가 반영됩니다.',
+    sdRetTitle: '🔄 고객 반품 (Customer Return)',
+    sdRetDesc: '고객이 FERT001 2EA를 반품합니다. 반품오더(RE) → 반품입고 → 대변메모 순서로 매출을 취소 처리합니다.',
+    btnRetSO: 'VA01 — 반품오더 생성 (Return Order)',
+    btnRetDel: 'VL01N — 반품 입고 (Returns Delivery)',
+    btnCreditMemo: 'VF01 — 대변메모 발행 (Credit Memo)',
+    sdTitle: '💰 후속 차변 시나리오 (Subsequent Debit)',
+    sdDesc: '최초 송장 처리 후 공급업체가 추가 비용(운임/관세 등)을 청구하는 경우. MIRO 후속 차변으로 처리하며, 표준가(S) 자재는 PRD(구매가격차이) 계정에 반영됩니다.',
+    sdContext: '전제: MM 기본 구매 시나리오(ME21N→MIGO→MIRO) 완료 후 발생하는 추가 비용',
+    sdNote1: '▶ 운임 후속 차변: 추가 운임 $30 청구',
+    sdNote2: '▶ 관세 후속 차변: 수입 관세 $15 추가 부과',
+    sdResultLabel: '후속 차변 누적 PRD',
+    sdMLNote: '💡 ML 결산 시 이 추가 PRD는 재고/소비 비율로 배부됩니다.',
+    btnMiroSD: 'MIRO — 후속 차변 (운임 $30)',
+    btnMiroSD2: 'MIRO — 후속 차변 (관세 $15)',
+    btnF53SD: 'F-53 — 추가 비용 지급',
+    ledgerEmpty: '아직 실행된 단계가 없습니다. 각 탭에서 T-code를 실행하면 분개가 여기에 누적됩니다.',
+    ledgerCount: '실행된 T-code의 회계전표를 순서대로 표시합니다',
+    ledgerColMod: '모듈',
+    ledgerColDesc: '설명',
+    ledgerColDr: '차변(Dr)',
+    ledgerColCr: '대변(Cr)',
+    dryrunTitle: 'E2E 전체 거래 Dryrun',
+    dryrunSub: '마스터 설정부터 CO-PA까지 전체 거래 순서 (분개 없는 거래 포함)',
+    colNo: 'No',
+    colModule: '모듈',
+    colTx: '거래',
+    colDr: '차변 (Dr)',
+    colDrAmt: '금액',
+    colCr: '대변 (Cr)',
+    colCrAmt: '금액',
+    colDescMemo: '설명 메모',
+    noJournal: '분개 없음',
+  },
+  en: {
+    tabs: ['Master/BOM','MM Purchase','PP Production','FI/CO Costing','SD Sales','📒 Ledger'],
+    masterGuideTitle: 'Master Data & BOM Operation Guide',
+    mmGuideTitle: 'MM Purchasing Process Guide',
+    ppGuideTitle: 'PP Production Process Guide',
+    ficoGuideTitle: 'FI/CO Cost Settlement Guide',
+    sdGuideTitle: 'SD Sales Process Guide',
+    csvTitle: '📦 Material Upload (CSV)',
+    csvBtn: 'Select CSV',
+    csvReset: 'Reset Defaults',
+    bomTitle: '🌳 Multi-Level BOM Tree',
+    rollupTitle: '💰 Cost Rollup (Bottom-up)',
+    stdCostTitle: '📊 Standard Cost Cycle (KP26 → CK11N → CK24)',
+    stdCostResult: '📊 Standard Cost Result',
+    invTable: '📦 Inventory',
+    diffTable: '📊 Variance / Balance',
+    wipTable: '🔧 WIP (Order Accumulated Cost)',
+    diffStatus: '📊 Variance Summary',
+    copaTitle: '📈 CO-PA Profitability Analysis',
+    closeStatus: '🔵 Settlement Progress',
+    ledgerTitle: 'Journal Entry Ledger',
+    printBtn: '🖨️ Print',
+    balTitle: 'Account Balances',
+    plTitle: 'End-to-End P&L',
+    arTitle: '📋 Sales Summary',
+    finInv: 'Finished Goods Inventory',
+    salesRev: 'Sales / Balance',
+    colMat: 'Material',
+    colQty: 'Qty',
+    colAmt: 'Amount',
+    colUP: 'Unit Price',
+    colCode: 'Code',
+    colDesc: 'Description',
+    colType: 'Type',
+    colStd: 'Std Price',
+    colUnit: 'UOM',
+    colStatus: 'Status',
+    colCalc: 'Calc Price',
+    colCurr: 'Current Std',
+    journalBtn: 'Journal',
+    guideExpand: '▼ Expand',
+    guideCollapse: '▲ Collapse',
+    footerFlow: 'Cross-tab data flow: MM Receipt → PP Issue → PP FG → SD Issue / FI/CO Settlement → SD Actual P&L',
+    stdCostDesc: 'Follow this order: Plan activity rates (KP26) → Calculate/Release lower-level (HALB001) → Calculate/Release upper-level (FERT001).',
+    btnKP26: 'KP26 — Enter Activity Rate Plan',
+    btnCK11N_H: 'CK11N — Calculate HALB001 Standard Cost',
+    btnCK24_H: 'CK24 — Release HALB001 Standard Cost',
+    btnCK11N_F: 'CK11N — Calculate FERT001 Standard Cost',
+    btnCK24_F: 'CK24 — Release FERT001 Standard Cost',
+    stdNotReleased: 'Not Released',
+    stdReleased: '✅ Released',
+    rollupMat: '(material cost)',
+    mmScenTitle: 'MM Purchasing Scenario',
+    mmScenDesc: 'Purchase ROH001 Aluminum Sheet 100KG from Vendor V001 (Alcoa Aluminum Supply). PO price $5.00/KG, standard price $5.50/KG → Purchase Price Variance on GR.',
+    btnME21N: 'ME21N — Create PO',
+    btnMIGO_GR: 'MIGO (101) — Goods Receipt',
+    btnMIRO: 'MIRO — Invoice Verification',
+    btnF53: 'F-53 — Payment',
+    labelPPV: 'Purchase Price Variance (PPV)',
+    labelAP: 'AP-V001 Balance',
+    retTitle: '🔄 Vendor Return Scenario',
+    retDesc: 'Return ROH001 20KG to vendor (movement type 122). Reversal of GR (101), inventory decreases.',
+    btnRetPO: 'ME21N — Create Return PO',
+    btnRetMIGO: 'MIGO (122) — Vendor Return',
+    miTitle: '🔍 Physical Inventory',
+    miDesc: 'Proceed: Create inventory document → Enter count → Post difference. Shortage between book qty and physical qty is posted as inventory loss.',
+    btnMI01: 'MI01 — Create Inventory Document',
+    btnMI04: 'MI04 — Enter Count',
+    btnMI07: 'MI07 — Post Difference',
+    ppPhase1Title: 'PP Production — Phase 1: Semi-Finished HALB001 (20EA)',
+    ppPhase2Title: 'PP Production — Phase 2: Finished Goods FERT001 (10EA)',
+    ppPhase2Lock: '⚠️ Available after Phase 1 completion',
+    ppSettleTitle: '⚖️ Order Settlement (KO88)',
+    btnCO01_H: 'CO01 — Create Production Order (HALB001 20EA)',
+    btnGI_H: 'MIGO (261) — Goods Issue to Production',
+    btnCO11N_H: 'CO11N — Confirm Production (Labor 20h/Machine 10h)',
+    btnGR_H: 'MIGO (101) — Semi-Finished GR',
+    btnCO01_F: 'CO01 — Create Production Order (FERT001 10EA)',
+    btnGI_F: 'MIGO (261) — Issue Semi-Finished/Raw Materials',
+    btnCO11N_F: 'CO11N — Confirm Production (Labor 5h/Machine 2.5h)',
+    btnGR_F: 'MIGO (101) — Finished Goods GR',
+    btnKO88_H: 'KO88 (HALB001) — Settlement',
+    btnKO88_F: 'KO88 (FERT001) — Settlement',
+    wipHALB: 'HALB001 Order WIP',
+    wipFERT: 'FERT001 Order WIP',
+    varHALB: 'HALB001 Settlement Variance',
+    varFERT: 'FERT001 Settlement Variance',
+    ficoCardTitle: 'FI/CO Costing — Material Ledger Settlement',
+    btnKSS2: 'KSS2 — Revalue Activity Prices',
+    btnSL_ROH: 'CKMLCP (SL-ROH) — Raw Material Single-Level',
+    btnSL_HALB: 'CKMLCP (SL-HALB) — Semi-Finished Single-Level',
+    btnML: 'CKMLCP (ML) — Finished Goods Multi-Level Rollup',
+    btnPC: 'CKMLCP (PC) — Post Closing',
+    btnKE27: 'KE27 — CO-PA Actual Posting',
+    ckm3ROH: 'CKM3 — ROH001 (Raw Material)',
+    ckm3HALB: 'CKM3 — HALB001 (Semi-Finished)',
+    ckm3FERT: 'CKM3 — FERT001 (Finished Goods)',
+    ckm3Cat: 'Category',
+    ckm3Prelim: 'Prelim. Val.',
+    ckm3Var: 'Variance',
+    ckm3Opening: 'Opening',
+    ckm3Receipt: 'Receipt',
+    ckm3Cumul: 'Cumulative',
+    ckm3Consump: 'Consumption',
+    ckm3Closing: 'Closing',
+    copaRevenue: 'Revenue',
+    copaCOGS: 'COGS (Standard)',
+    copaStdMargin: 'Standard Margin',
+    copaMLAdj: 'ML Cost Adjustment',
+    copaActMargin: 'Actual Margin',
+    settleProg1: 'Activity Rate Revaluation',
+    settleProg2: 'ROH Single-Level Allocation',
+    settleProg3: 'HALB Single-Level Allocation',
+    settleProg4: 'Multi-Level Rollup',
+    settleProg5: 'Post Closing',
+    settleProg6: 'CO-PA Actual Posting',
+    mr21CardTitle: '🔄 Material Revaluation (MR21)',
+    mr21Desc: 'Revalue HALB001 inventory 10EA from old standard price ($18) to new standard price ($41.375). Difference posted to inventory revaluation account.',
+    btnMR21: 'MR21 — HALB001 Standard Cost Revaluation',
+    mr21Result: 'MR21 Revaluation Result',
+    mr21OldStd: 'Old Std Price',
+    mr21NewStd: 'New Std Price',
+    mr21Diff: 'Revaluation Diff.',
+    mmConnBadge: 'ROH001 Purchase Price Variance (PPV) {ppv} is included in the ML settlement ROH001 variance.',
+    ficoFlow1: '📦 MM PPV: -$50.00 (Favorable) → Included in ROH001 variance',
+    ficoFlow2: '🏭 PP HALB Variance: +$467.50 (Unfavorable) → Rolled up HALB001 → FERT001',
+    ficoFlow3: '🏭 PP FERT Variance: -$30.00 (Favorable) → FERT001 own variance',
+    ficoFlow4: '📊 Final COGS Adjustment: +$101.875 (Unfavorable) → Actual margin 56.4%',
+    sdScenTitle: 'SD Sales Scenario',
+    sdScenDesc: 'Sell FERT001 5EA @ $150 to Customer C001 (Ford Motor Company) (Total $750).',
+    btnVA01: 'VA01 — Create Sales Order',
+    btnVL01N: 'VL01N — Outbound Delivery (Goods Issue)',
+    btnVF01: 'VF01 — Billing',
+    btnF28: 'F-28 — Incoming Payment',
+    labelRevenue: 'Revenue (Recognized)',
+    labelAR: 'AR-C001 Balance',
+    plTitle2: '🏁 Final P&L Comparison (Standard vs Actual)',
+    plCat: 'Item',
+    plStd: 'Standard',
+    plAct: 'Actual',
+    plRevenue: 'Revenue',
+    plCOGS: 'COGS',
+    plGP: 'Gross Profit',
+    plNote: '⚠️ Complete CKMLCP(PC) in FI/CO tab to reflect actual COGS.',
+    sdRetTitle: '🔄 Customer Return',
+    sdRetDesc: 'Customer returns FERT001 2EA. Process: Return Order (RE) → Returns Delivery → Credit Memo to cancel revenue.',
+    btnRetSO: 'VA01 — Create Return Order',
+    btnRetDel: 'VL01N — Returns Delivery (GR)',
+    btnCreditMemo: 'VF01 — Issue Credit Memo',
+    sdTitle: '💰 Subsequent Debit Scenario',
+    sdDesc: 'Vendor charges additional costs (freight, duty, etc.) after the original invoice. Processed via MIRO Subsequent Debit. For standard price (S) materials, posted to PRD (Price Difference) account.',
+    sdContext: 'Prerequisite: MM basic purchasing scenario (ME21N→MIGO→MIRO) completed before these additional charges occur.',
+    sdNote1: '▶ Freight subsequent debit: additional freight charge $30',
+    sdNote2: '▶ Duty subsequent debit: additional import duty $15',
+    sdResultLabel: 'Cumulative Subsequent Debit PRD',
+    sdMLNote: '💡 In ML closing, this additional PRD will be allocated to inventory/consumption based on qty ratio.',
+    btnMiroSD: 'MIRO — Subsequent Debit (Freight $30)',
+    btnMiroSD2: 'MIRO — Subsequent Debit (Duty $15)',
+    btnF53SD: 'F-53 — Pay Additional Charges',
+    ledgerEmpty: 'No steps executed yet. Run T-codes in each tab to accumulate journal entries here.',
+    ledgerCount: 'Journal entries from executed T-codes in sequence',
+    ledgerColMod: 'Module',
+    ledgerColDesc: 'Description',
+    ledgerColDr: 'Debit (Dr)',
+    ledgerColCr: 'Credit (Cr)',
+    dryrunTitle: 'E2E Full Transaction Dryrun',
+    dryrunSub: 'Complete transaction sequence from Master Setup to CO-PA (including no-journal transactions)',
+    colNo: 'No',
+    colModule: 'Module',
+    colTx: 'Transaction',
+    colDr: 'Debit (Dr)',
+    colDrAmt: 'Amount',
+    colCr: 'Credit (Cr)',
+    colCrAmt: 'Amount',
+    colDescMemo: 'Description / Memo',
+    noJournal: 'No journal entry',
+  }
+};
+
+/* =========================================================================
+   JOURNAL DATA (KO/EN per T-code) — used by JournalPopup via lang toggle
+   ========================================================================= */
+const JOURNAL_DATA = {
+
+  /* ── Master/BOM ── */
+  kp26: {
+    ko: { tcode:'KP26', title:'액티비티 단가 계획', lines:[
+      { account:'CC001 Labor: $20.00/h (계획)' },
+      { account:'CC001 Machine: $30.00/h (계획)' },
+      { account:'CC002 Labor: $25.00/h (계획)' },
+      { account:'CC002 Machine: $40.00/h (계획)' },
+    ], note:'코스트센터별 액티비티 단가를 계획합니다. 표준원가 계산의 기초가 됩니다.' },
+    en: { tcode:'KP26', title:'Plan Activity Rates', lines:[
+      { account:'CC001 Labor: $20.00/h (plan)' },
+      { account:'CC001 Machine: $30.00/h (plan)' },
+      { account:'CC002 Labor: $25.00/h (plan)' },
+      { account:'CC002 Machine: $40.00/h (plan)' },
+    ], note:'Plan activity rates per cost center. This is the basis for standard cost calculation.' },
+  },
+  ck11n_h: {
+    ko: { tcode:'CK11N', title:'HALB001 표준원가 계산', lines:[
+      { account:'재료비: ROH001 3KG × $5.50 = $16.50' },
+      { account:'재료비: ROH002 1KG × $3.20 = $3.20' },
+      { account:'노무비: CC001 1.0h × $20 = $20.00' },
+      { account:'기계비: CC001 0.5h × $30 = $15.00' },
+      { account:'합계(계산가): $54.70' },
+    ], note:'현재 표준가 $18.00 vs 계산가 $54.70 → CK24로 릴리즈 시 표준가 갱신' },
+    en: { tcode:'CK11N', title:'Calculate HALB001 Standard Cost', lines:[
+      { account:'Material: ROH001 3KG × $5.50 = $16.50' },
+      { account:'Material: ROH002 1KG × $3.20 = $3.20' },
+      { account:'Labor: CC001 1.0h × $20 = $20.00' },
+      { account:'Machine: CC001 0.5h × $30 = $15.00' },
+      { account:'Total (calculated): $54.70' },
+    ], note:'Current std price $18.00 vs calculated $54.70 → Release via CK24 to update standard price.' },
+  },
+  ck24_h: {
+    ko: { tcode:'CK24', title:'HALB001 표준원가 릴리즈', lines:[
+      { type:'Dr', account:'완제품/반제품 재고 재평가', amount:'계산가 기반' },
+      { type:'Cr', account:'재고재평가손익', amount:'차이분' },
+    ], note:'HALB001 표준가를 $18.00 → $54.70으로 업데이트. 실제 운영에서는 연초 1회 실행.' },
+    en: { tcode:'CK24', title:'Release HALB001 Standard Cost', lines:[
+      { type:'Dr', account:'Inventory Revaluation (Semi-Finished)', amount:'Based on calc. price' },
+      { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:'Difference' },
+    ], note:'Update HALB001 standard price $18.00 → $54.70. In production, run once at fiscal year start.' },
+  },
+  ck11n_f: {
+    ko: { tcode:'CK11N', title:'FERT001 표준원가 계산', lines:[
+      { account:'반제품: HALB001 1EA × $54.70 = $54.70 (릴리즈 후 새 표준가)' },
+      { account:'재료비: ROH001 0.5KG × $5.50 = $2.75' },
+      { account:'노무비: CC002 0.5h × $25 = $12.50' },
+      { account:'기계비: CC002 0.25h × $40 = $10.00' },
+      { account:'합계(계산가): $79.95' },
+    ], note:'하위 레벨(HALB001) 표준원가 릴리즈 후 상위 레벨(FERT001) 계산. 반드시 순서를 지켜야 합니다.' },
+    en: { tcode:'CK11N', title:'Calculate FERT001 Standard Cost', lines:[
+      { account:'Semi-finished: HALB001 1EA × $54.70 = $54.70 (new std after release)' },
+      { account:'Material: ROH001 0.5KG × $5.50 = $2.75' },
+      { account:'Labor: CC002 0.5h × $25 = $12.50' },
+      { account:'Machine: CC002 0.25h × $40 = $10.00' },
+      { account:'Total (calculated): $79.95' },
+    ], note:'Calculate upper-level (FERT001) after releasing lower-level (HALB001) standard cost. Order is mandatory.' },
+  },
+  ck24_f: {
+    ko: { tcode:'CK24', title:'FERT001 표준원가 릴리즈', lines:[
+      { type:'Dr', account:'완제품 재고 재평가', amount:'계산가 기반' },
+      { type:'Cr', account:'재고재평가손익', amount:'차이분' },
+    ], note:'FERT001 표준가를 $45.00 → $79.95으로 업데이트. 이후 모든 생산/판매 거래에 새 표준가 적용.' },
+    en: { tcode:'CK24', title:'Release FERT001 Standard Cost', lines:[
+      { type:'Dr', account:'Finished Goods Inventory Revaluation', amount:'Based on calc. price' },
+      { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:'Difference' },
+    ], note:'Update FERT001 standard price $45.00 → $79.95. New standard price applies to all subsequent production and sales.' },
+  },
+
+  /* ── MM Purchase ── */
+  me21n: {
+    ko: { tcode:'ME21N', title:'구매오더 생성', lines:[
+      { account:'Commitment 기록만 (예산약정)' }
+    ], note:'PO 생성: 분개 없음, Commitment 기록만' },
+    en: { tcode:'ME21N', title:'Create Purchase Order', lines:[
+      { account:'Commitment record only (budget commitment)' }
+    ], note:'PO created: no journal entry, Commitment record only.' },
+  },
+  migo_gr: {
+    ko: { tcode:'MIGO', title:'입고 (Goods Receipt 101)', lines:[
+      { type:'Dr', account:'원재료 ROH001 (재고)', amount:550 },
+      { type:'Cr', account:'GR/IR (입고미착)', amount:500 },
+      { type:'Cr', account:'구매가격차이 (PPV, 유리)', amount:50 },
+    ], note:'100KG × $5.50 표준가로 재고 평가. 발주가 $5.00 → $50 유리 차이' },
+    en: { tcode:'MIGO', title:'Goods Receipt (Movement 101)', lines:[
+      { type:'Dr', account:'Raw Material ROH001 (Inventory)', amount:550 },
+      { type:'Cr', account:'GR/IR Clearing', amount:500 },
+      { type:'Cr', account:'Purchase Price Variance (PPV, Favorable)', amount:50 },
+    ], note:'100KG × $5.50 std price. PO price $5.00 → $50 favorable variance.' },
+  },
+  miro: {
+    ko: { tcode:'MIRO', title:'송장 검증 (Invoice Receipt)', lines:[
+      { type:'Dr', account:'GR/IR (입고미착)', amount:500 },
+      { type:'Cr', account:'외상매입금 AP-V001', amount:500 },
+    ], note:'송장 금액 $500 (발주가 기준)' },
+    en: { tcode:'MIRO', title:'Invoice Verification', lines:[
+      { type:'Dr', account:'GR/IR Clearing', amount:500 },
+      { type:'Cr', account:'Accounts Payable AP-V001', amount:500 },
+    ], note:'Invoice amount $500 (based on PO price).' },
+  },
+  f53: {
+    ko: { tcode:'F-53', title:'대금 지급', lines:[
+      { type:'Dr', account:'외상매입금 AP-V001', amount:500 },
+      { type:'Cr', account:'현금 Cash', amount:500 },
+    ], note:'Vendor 지급 완료' },
+    en: { tcode:'F-53', title:'Vendor Payment', lines:[
+      { type:'Dr', account:'Accounts Payable AP-V001', amount:500 },
+      { type:'Cr', account:'Cash / Bank', amount:500 },
+    ], note:'Vendor payment completed.' },
+  },
+  me21n_ret: {
+    ko: { tcode:'ME21N', title:'반품 PO 생성', lines:[
+      { account:'반품 PO: ROH001 20KG 반품 예정' }
+    ], note:'이동유형 122를 사용하여 공급업체에 자재를 반환합니다.' },
+    en: { tcode:'ME21N', title:'Create Return PO', lines:[
+      { account:'Return PO: ROH001 20KG scheduled for return' }
+    ], note:'Use movement type 122 to return materials to vendor.' },
+  },
+  migo_ret: {
+    ko: { tcode:'MIGO', title:'공급업체 반품 (122)', lines:[
+      { type:'Cr', account:'원재료 ROH001 (20KG × $5.50)', amount:110 },
+      { type:'Dr', account:'GR/IR (환급 예정)', amount:100 },
+      { type:'Dr', account:'구매가격차이 (PPV)', amount:10 },
+    ], note:'이동유형 122: 입고(101)의 반대 처리. 재고 감소, GRIR 재생성.' },
+    en: { tcode:'MIGO', title:'Vendor Return (Movement 122)', lines:[
+      { type:'Cr', account:'Raw Material ROH001 (20KG × $5.50)', amount:110 },
+      { type:'Dr', account:'GR/IR Clearing (credit expected)', amount:100 },
+      { type:'Dr', account:'Purchase Price Variance (PPV)', amount:10 },
+    ], note:'Movement 122: Reversal of GR (101). Inventory decreases, GRIR re-created.' },
+  },
+  mi01: {
+    ko: { tcode:'MI01', title:'실사문서 생성', lines:[
+      { account:'실사문서 생성: 실사일자 기준 재고 잠금' }
+    ], note:'실사 기간 동안 해당 자재의 입출고가 제한됩니다.' },
+    en: { tcode:'MI01', title:'Create Inventory Document', lines:[
+      { account:'Inventory document created: stock locked as of count date' }
+    ], note:'Goods movements for this material are restricted during the inventory count period.' },
+  },
+  mi04: {
+    ko: { tcode:'MI04', title:'실사 수량 입력', lines:[
+      { account:'장부수량: 100 KG / 실사수량: 98 KG / 차이: -2 KG' }
+    ], note:'실사 수량과 장부 수량 차이를 기록합니다.' },
+    en: { tcode:'MI04', title:'Enter Inventory Count', lines:[
+      { account:'Book qty: 100 KG / Counted qty: 98 KG / Difference: -2 KG' }
+    ], note:'Record the difference between physical count and book quantity.' },
+  },
+  mi07: {
+    ko: { tcode:'MI07', title:'실사 차이 전기', lines:[
+      { type:'Dr', account:'재고감모손실 (Inventory Loss)', amount:11 },
+      { type:'Cr', account:'원재료 ROH001 (2KG × $5.50)', amount:11 },
+    ], note:'장부 vs 실물 차이 2KG × $5.50 = $11 감모손실 계상.' },
+    en: { tcode:'MI07', title:'Post Inventory Difference', lines:[
+      { type:'Dr', account:'Inventory Loss (Shortage)', amount:11 },
+      { type:'Cr', account:'Raw Material ROH001 (2KG × $5.50)', amount:11 },
+    ], note:'2KG × $5.50 = $11 inventory loss posted for book vs. physical difference.' },
+  },
+
+  /* ── PP Production ── */
+  co01_h: {
+    ko: { tcode:'CO01', title:'생산오더 생성 HALB001', lines:[{ account:'오더 생성 (계획)' }], note:'생산오더 생성, 분개 없음' },
+    en: { tcode:'CO01', title:'Create Production Order HALB001', lines:[{ account:'Order created (planned)' }], note:'Production order created, no journal entry.' },
+  },
+  gi_h: {
+    ko: { tcode:'MIGO', title:'원재료 출고 (261) → WIP', lines:[
+      { type:'Dr', account:'WIP 재공품 (자재투입)', amount:394 },
+      { type:'Cr', account:'원재료 ROH001 (60KG×$5.50)', amount:330 },
+      { type:'Cr', account:'원재료 ROH002 (20KG×$3.20)', amount:64 },
+    ], note:'BOM 표준 소요량 기준 출고: ROH001 60KG + ROH002 20KG = $394' },
+    en: { tcode:'MIGO', title:'Goods Issue (261) → WIP', lines:[
+      { type:'Dr', account:'WIP (material input)', amount:394 },
+      { type:'Cr', account:'Raw Material ROH001 (60KG×$5.50)', amount:330 },
+      { type:'Cr', account:'Raw Material ROH002 (20KG×$3.20)', amount:64 },
+    ], note:'Issue per BOM standard qty: ROH001 60KG + ROH002 20KG = $394.' },
+  },
+  co11n_h: {
+    ko: { tcode:'CO11N', title:'생산 확정 (Confirmation)', lines:[
+      { type:'Dr', account:'WIP 재공품 (활동투입)', amount:433.50 },
+      { type:'Cr', account:'Activity 노무비 (CC001 20h×$14.675)', amount:293.50 },
+      { type:'Cr', account:'Activity 기계비 (CC001 10h×$14.00)', amount:140 },
+    ], note:'자재 $394 + 활동 $433.50 = 실제 $827.50 → 표준 $360 → 차이 $467.50 불리(KO88)' },
+    en: { tcode:'CO11N', title:'Production Confirmation', lines:[
+      { type:'Dr', account:'WIP (activity input)', amount:433.50 },
+      { type:'Cr', account:'Activity Labor (CC001 20h×$14.675)', amount:293.50 },
+      { type:'Cr', account:'Activity Machine (CC001 10h×$14.00)', amount:140 },
+    ], note:'Material $394 + Activity $433.50 = Actual $827.50 → Std $360 → Variance $467.50 Unfavorable (KO88).' },
+  },
+  gr_h: {
+    ko: { tcode:'MIGO', title:'반제품 입고 (101)', lines:[
+      { type:'Dr', account:'반제품 HALB001 (20EA×$18)', amount:360 },
+      { type:'Cr', account:'생산완성대체 (FactoryOutput)', amount:360 },
+    ], note:'표준가 $18.00 × 20EA = $360 입고' },
+    en: { tcode:'MIGO', title:'Semi-Finished GR (Movement 101)', lines:[
+      { type:'Dr', account:'Semi-Finished HALB001 (20EA×$18)', amount:360 },
+      { type:'Cr', account:'Factory Output (GBB/AUF)', amount:360 },
+    ], note:'Standard price $18.00 × 20EA = $360 received into stock.' },
+  },
+  co01_f: {
+    ko: { tcode:'CO01', title:'생산오더 생성 FERT001', lines:[{ account:'오더 생성 (계획)' }], note:'생산오더 생성, 분개 없음' },
+    en: { tcode:'CO01', title:'Create Production Order FERT001', lines:[{ account:'Order created (planned)' }], note:'Production order created, no journal entry.' },
+  },
+  gi_f: {
+    ko: { tcode:'MIGO', title:'반제품/원재료 출고 (261) → WIP', lines:[
+      { type:'Dr', account:'WIP 재공품 (재공품)', amount:207.50 },
+      { type:'Cr', account:'반제품 HALB001 (10EA×$18)', amount:180 },
+      { type:'Cr', account:'원재료 ROH001 (5KG×$5.50)', amount:27.50 },
+    ], note:'완성품 BOM 투입: HALB001 10 + ROH001 5KG' },
+    en: { tcode:'MIGO', title:'Issue Semi-Finished/Raw Materials (261) → WIP', lines:[
+      { type:'Dr', account:'WIP', amount:207.50 },
+      { type:'Cr', account:'Semi-Finished HALB001 (10EA×$18)', amount:180 },
+      { type:'Cr', account:'Raw Material ROH001 (5KG×$5.50)', amount:27.50 },
+    ], note:'Finished goods BOM input: HALB001 10EA + ROH001 5KG.' },
+  },
+  co11n_f: {
+    ko: { tcode:'CO11N', title:'완성품 확정 (Confirmation)', lines:[
+      { type:'Dr', account:'WIP 재공품 (활동투입)', amount:212.50 },
+      { type:'Cr', account:'Activity 노무비 (CC002 5h×$25)', amount:125 },
+      { type:'Cr', account:'Activity 기계비 (CC002 2.5h×$35)', amount:87.50 },
+    ], note:'자재 $207.50 + 활동 $212.50 = 실제 $420 → 표준 $450 → 차이 -$30 유리(KO88)' },
+    en: { tcode:'CO11N', title:'Finished Goods Production Confirmation', lines:[
+      { type:'Dr', account:'WIP (activity input)', amount:212.50 },
+      { type:'Cr', account:'Activity Labor (CC002 5h×$25)', amount:125 },
+      { type:'Cr', account:'Activity Machine (CC002 2.5h×$35)', amount:87.50 },
+    ], note:'Material $207.50 + Activity $212.50 = Actual $420 → Std $450 → Variance -$30 Favorable (KO88).' },
+  },
+  gr_f: {
+    ko: { tcode:'MIGO', title:'완성품 입고 (101)', lines:[
+      { type:'Dr', account:'완제품 FERT001 (10EA×$45)', amount:450 },
+      { type:'Cr', account:'생산완성대체 (FactoryOutput)', amount:450 },
+    ], note:'표준가 $45.00 × 10EA = $450 입고' },
+    en: { tcode:'MIGO', title:'Finished Goods GR (Movement 101)', lines:[
+      { type:'Dr', account:'Finished Goods FERT001 (10EA×$45)', amount:450 },
+      { type:'Cr', account:'Factory Output (GBB/AUF)', amount:450 },
+    ], note:'Standard price $45.00 × 10EA = $450 received into stock.' },
+  },
+  ko88_h: {
+    ko: { tcode:'KO88', title:'오더 정산 HALB001', lines:[
+      { type:'Dr', account:'생산정산차이 (불리)', amount:467.50 },
+      { type:'Cr', account:'생산완성대체', amount:467.50 },
+    ], note:'실제 $827.50 (자재$394 + 활동$433.50) - 표준 $360 = $467.50 불리(Unfavorable)' },
+    en: { tcode:'KO88', title:'Order Settlement HALB001', lines:[
+      { type:'Dr', account:'Production Settlement Variance (Unfavorable)', amount:467.50 },
+      { type:'Cr', account:'Factory Output (GBB/AUF)', amount:467.50 },
+    ], note:'Actual $827.50 (material $394 + activity $433.50) - Std $360 = $467.50 Unfavorable.' },
+  },
+  ko88_f: {
+    ko: { tcode:'KO88', title:'오더 정산 FERT001', lines:[
+      { type:'Dr', account:'생산완성대체', amount:30 },
+      { type:'Cr', account:'생산정산차이 (유리)', amount:30 },
+    ], note:'실제 $420 (자재$207.50 + 활동$212.50) - 표준 $450 = -$30 유리(Favorable)' },
+    en: { tcode:'KO88', title:'Order Settlement FERT001', lines:[
+      { type:'Dr', account:'Factory Output (GBB/AUF)', amount:30 },
+      { type:'Cr', account:'Production Settlement Variance (Favorable)', amount:30 },
+    ], note:'Actual $420 (material $207.50 + activity $212.50) - Std $450 = -$30 Favorable.' },
+  },
+
+  /* ── FI/CO ── */
+  kss2: {
+    ko: { tcode:'KSS2', title:'Activity 단가 재평가', lines:[
+      { account:'CC001 Labor 실제: $22/h (계획 $20/h)' },
+      { account:'CC001 Machine 실제: $28/h (계획 $30/h)' },
+      { account:'CC002 Labor 실제: $51/h (계획 $25/h)' },
+    ], note:'코스트센터 실제 발생액 기준 실제단가 계산. 계획단가와의 차이가 Activity Variance 발생.' },
+    en: { tcode:'KSS2', title:'Revalue Activity Prices', lines:[
+      { account:'CC001 Labor actual: $22/h (plan $20/h)' },
+      { account:'CC001 Machine actual: $28/h (plan $30/h)' },
+      { account:'CC002 Labor actual: $51/h (plan $25/h)' },
+    ], note:'Calculate actual activity rates based on cost center actual costs. Difference from plan = Activity Rate Variance.' },
+  },
+  sl_roh: {
+    ko: { tcode:'CKMLCP', title:'원자재 단일레벨 ML 배부', lines:[
+      { account:'ROH001 총 차이: -$50 (유리)' },
+      { account:'재고분 배부: -$17.50 (35KG)' },
+      { account:'소비분 배부: -$32.50 (65KG → HALB001 롤업)' },
+    ], note:'단일레벨: 해당 자재의 차이를 재고/소비 수량 비율로 배부' },
+    en: { tcode:'CKMLCP', title:'Raw Material Single-Level ML Allocation', lines:[
+      { account:'ROH001 total variance: -$50 (Favorable)' },
+      { account:'Inventory allocation: -$17.50 (35KG remaining)' },
+      { account:'Consumption allocation: -$32.50 (65KG → rolled up to HALB001)' },
+    ], note:'Single-level: Allocate variance to inventory/consumption based on qty ratio.' },
+  },
+  sl_halb: {
+    ko: { tcode:'CKMLCP', title:'반제품 단일레벨 ML 배부', lines:[
+      { account:'HALB001 생산정산차이: +$467.50' },
+      { account:'ROH001 소비분 롤업: -$32.50' },
+      { account:'순차이: $467.50 - $32.50 = $435.00 → 배부' },
+      { account:'재고분(10EA): +$217.50 / 소비분(10EA): +$217.50' },
+    ], note:'단일레벨 후 소비분 $217.50이 FERT001 다중레벨 롤업 대상' },
+    en: { tcode:'CKMLCP', title:'Semi-Finished Single-Level ML Allocation', lines:[
+      { account:'HALB001 production variance: +$467.50' },
+      { account:'ROH001 consumption rollup: -$32.50' },
+      { account:'Net variance: $467.50 - $32.50 = $435.00 → allocated' },
+      { account:'Inventory (10EA): +$217.50 / Consumption (10EA): +$217.50' },
+    ], note:'Consumption portion $217.50 is subject to FERT001 multi-level rollup.' },
+  },
+  ml: {
+    ko: { tcode:'CKMLCP', title:'완성품 다중레벨 롤업', lines:[
+      { account:'HALB001 소비분 이전: +$217.50' },
+      { account:'FERT001 자체 차이: -$30.00' },
+      { account:'총 차이: $217.50 - $30.00 = +$187.50' },
+      { account:'재고분(5EA): +$93.75 / 소비분(5EA): +$93.75' },
+    ], note:'반제품 소비 차이가 완성품 원가에 롤업됨 → 멀티레벨 ML의 핵심' },
+    en: { tcode:'CKMLCP', title:'Finished Goods Multi-Level Rollup', lines:[
+      { account:'HALB001 consumption transferred: +$217.50' },
+      { account:'FERT001 own variance: -$30.00' },
+      { account:'Net variance: $217.50 - $30.00 = +$187.50' },
+      { account:'Inventory (5EA): +$93.75 / Consumption (5EA): +$93.75' },
+    ], note:'Semi-finished consumption variance rolled up to finished goods cost — the key of multi-level ML.' },
+  },
+  ml_pc: {
+    ko: { tcode:'CKMLCP', title:'결산전기 (Post Closing)', lines:[
+      { type:'Dr', account:'완제품 FERT001 (재고분)', amount:93.75 },
+      { type:'Cr', account:'ML차이계정', amount:93.75 },
+      { type:'Dr', account:'매출원가 (소비분)', amount:93.75 },
+      { type:'Cr', account:'ML차이계정', amount:93.75 },
+    ], note:'재고/소비 모두 실제원가로 재평가. 결산전기 후 해당 기간 재오픈 불가.' },
+    en: { tcode:'CKMLCP', title:'Post Closing', lines:[
+      { type:'Dr', account:'Finished Goods FERT001 (inventory portion)', amount:93.75 },
+      { type:'Cr', account:'ML Difference Account', amount:93.75 },
+      { type:'Dr', account:'Cost of Goods Sold (consumption portion)', amount:93.75 },
+      { type:'Cr', account:'ML Difference Account', amount:93.75 },
+    ], note:'Both inventory and COGS revalued to actual cost. Period cannot be reopened after post closing.' },
+  },
+  ke27: {
+    ko: { tcode:'KE27', title:'CO-PA 실제전기', lines:[
+      { account:'매출원가 표준 $225 → 실제 $318.75 재평가' },
+      { account:'CO-PA 수익성 세그먼트 업데이트' },
+    ], note:'ML 결산 후 실제원가를 CO-PA에 반영. 수익성 분석에 실제마진 표시.' },
+    en: { tcode:'KE27', title:'CO-PA Actual Posting', lines:[
+      { account:'COGS revalued: Standard $225 → Actual $318.75' },
+      { account:'CO-PA profitability segment updated' },
+    ], note:'Post actual costs to CO-PA after ML settlement. Profitability analysis shows actual margin.' },
+  },
+  mr21: {
+    ko: { tcode:'MR21', title:'자재 표준원가 재평가', lines:[
+      { type:'Dr', account:'반제품 HALB001 (재고재평가)', amount:233.75 },
+      { type:'Cr', account:'재고재평가손익 (Inventory Revaluation)', amount:233.75 },
+    ], note:'HALB001 재고 10EA를 구 표준가($18)에서 신 표준가($41.375)로 재평가. 차이 $233.75 계상.' },
+    en: { tcode:'MR21', title:'Material Standard Cost Revaluation', lines:[
+      { type:'Dr', account:'Semi-Finished HALB001 (revaluation)', amount:233.75 },
+      { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:233.75 },
+    ], note:'Revalue HALB001 inventory 10EA from old std price ($18) to new std price ($41.375). Difference $233.75 posted.' },
+  },
+
+  /* ── SD Sales ── */
+  va01: {
+    ko: { tcode:'VA01', title:'판매오더 생성', lines:[{ account:'SO 생성: 분개 없음' }], note:'판매오더 생성. FI 전표 없음, CO-PA에 수주 기록.' },
+    en: { tcode:'VA01', title:'Create Sales Order', lines:[{ account:'SO created: no journal entry' }], note:'Sales order created. No FI posting. Order recorded in CO-PA.' },
+  },
+  vl01n: {
+    ko: { tcode:'VL01N', title:'출하 (Goods Issue)', lines:[
+      { type:'Dr', account:'매출원가 COGS (5EA×$45)', amount:225 },
+      { type:'Cr', account:'완제품 FERT001', amount:225 },
+    ], note:'출하 전기(PGI): 재고 감소, 표준원가 기준 매출원가 인식' },
+    en: { tcode:'VL01N', title:'Outbound Delivery (Goods Issue)', lines:[
+      { type:'Dr', account:'Cost of Goods Sold (5EA×$45)', amount:225 },
+      { type:'Cr', account:'Finished Goods FERT001', amount:225 },
+    ], note:'Post Goods Issue (PGI): Inventory decreases, COGS recognized at standard price.' },
+  },
+  vf01: {
+    ko: { tcode:'VF01', title:'청구 (Billing / Invoice)', lines:[
+      { type:'Dr', account:'매출채권 AR (5EA×$150)', amount:750 },
+      { type:'Cr', account:'매출액 Revenue', amount:750 },
+    ], note:'청구 전기: 매출액 인식, CO-PA에 수익 전기' },
+    en: { tcode:'VF01', title:'Billing (Customer Invoice)', lines:[
+      { type:'Dr', account:'Accounts Receivable AR (5EA×$150)', amount:750 },
+      { type:'Cr', account:'Sales Revenue', amount:750 },
+    ], note:'Billing posted: revenue recognized, revenue posted to CO-PA.' },
+  },
+  f28: {
+    ko: { tcode:'F-28', title:'대금 수취', lines:[
+      { type:'Dr', account:'현금 Cash', amount:750 },
+      { type:'Cr', account:'매출채권 AR', amount:750 },
+    ], note:'고객 대금 수취 완료. AR 잔액 $0.' },
+    en: { tcode:'F-28', title:'Incoming Payment', lines:[
+      { type:'Dr', account:'Cash / Bank', amount:750 },
+      { type:'Cr', account:'Accounts Receivable AR', amount:750 },
+    ], note:'Customer payment received. AR balance $0.' },
+  },
+  va01_ret: {
+    ko: { tcode:'VA01', title:'반품 Sales Order', lines:[{ account:'반품 SO 생성: FERT001 2EA 반품 예정' }], note:'오더유형 RE(반품)으로 생성. 기준 청구서 번호 참조.' },
+    en: { tcode:'VA01', title:'Create Return Sales Order', lines:[{ account:'Return SO created: FERT001 2EA scheduled for return' }], note:'Created with order type RE (return). References original billing document.' },
+  },
+  vl01n_ret: {
+    ko: { tcode:'VL01N', title:'반품 입고 처리', lines:[
+      { type:'Dr', account:'완제품 FERT001 (2EA×$45)', amount:90 },
+      { type:'Cr', account:'반품매출원가 (대체)', amount:90 },
+    ], note:'고객에서 자재 반입. 표준원가 기준 재고 증가.' },
+    en: { tcode:'VL01N', title:'Returns Delivery (Goods Receipt)', lines:[
+      { type:'Dr', account:'Finished Goods FERT001 (2EA×$45)', amount:90 },
+      { type:'Cr', account:'Returns COGS Reversal', amount:90 },
+    ], note:'Material received from customer. Inventory increases at standard price.' },
+  },
+  vf01_ret: {
+    ko: { tcode:'VF01', title:'대변메모 (Credit Memo)', lines:[
+      { type:'Dr', account:'매출액 (환입)', amount:300 },
+      { type:'Cr', account:'매출채권 AR (감소)', amount:300 },
+    ], note:'고객에게 반품 금액 $300 (2EA×$150) 환급. 매출 취소 처리.' },
+    en: { tcode:'VF01', title:'Credit Memo', lines:[
+      { type:'Dr', account:'Sales Revenue (reversal)', amount:300 },
+      { type:'Cr', account:'Accounts Receivable AR (decrease)', amount:300 },
+    ], note:'Credit $300 (2EA×$150) issued to customer. Revenue reversed.' },
+  },
+
+  /* ── Subsequent Debit (후속 차변) ── */
+  miro_sd: {
+    ko: { tcode:'MIRO', title:'후속 차변 (Subsequent Debit)', lines:[
+      { type:'Dr', account:'구매가격차이 PRD (추가운임)', amount:30 },
+      { type:'Cr', account:'AP-V001 매입채무', amount:30 },
+    ], note:'표준가(S) 관리 자재는 후속 차변이 PRD(구매가격차이) 계정으로 처리됨. ML 결산 시 재고/소비에 배부.' },
+    en: { tcode:'MIRO', title:'Subsequent Debit', lines:[
+      { type:'Dr', account:'Price Difference PRD (additional freight)', amount:30 },
+      { type:'Cr', account:'AP-V001 Accounts Payable', amount:30 },
+    ], note:'For standard price (S) materials, subsequent debit posts to PRD (Price Difference). Allocated to stock/consumption in ML closing.' },
+  },
+  miro_sd2: {
+    ko: { tcode:'MIRO', title:'후속 차변 — 관세 추가 (Subsequent Debit)', lines:[
+      { type:'Dr', account:'구매가격차이 PRD (수입관세)', amount:15 },
+      { type:'Cr', account:'미지급금 (관세청)', amount:15 },
+    ], note:'수입 관세 추가 부과. 원자재 표준가와의 차이는 PRD 계정으로 처리.' },
+    en: { tcode:'MIRO', title:'Subsequent Debit — Additional Duty', lines:[
+      { type:'Dr', account:'Price Difference PRD (import duty)', amount:15 },
+      { type:'Cr', account:'Accrued Liabilities (Customs)', amount:15 },
+    ], note:'Additional import duty charged. Difference from material standard price posted to PRD account.' },
+  },
+  f53_sd: {
+    ko: { tcode:'F-53', title:'후속 차변 추가 비용 지급', lines:[
+      { type:'Dr', account:'AP-V001 매입채무', amount:30 },
+      { type:'Cr', account:'현금/은행', amount:30 },
+    ], note:'추가 운임 $30 지급 완료. AP 잔액 $0.' },
+    en: { tcode:'F-53', title:'Payment of Subsequent Debit', lines:[
+      { type:'Dr', account:'AP-V001 Accounts Payable', amount:30 },
+      { type:'Cr', account:'Cash/Bank', amount:30 },
+    ], note:'Additional freight $30 paid. AP balance $0.' },
+  },
+};
+
+/* =========================================================================
+   DRYRUN DATA (static E2E reference table — read-only)
+   ========================================================================= */
+const DRYRUN_DATA = [
+  /* ── 마스터 설정 ── */
+  { no:1,  module:'Master', tcode:'MM01', tx:{ ko:'자재마스터 생성',           en:'Create Material Masters'          }, dr:null, cr:null, desc:{ ko:'ROH001 Aluminum Sheet $5.50/KG, ROH002 Steel Rod $3.20/KG, HALB001 Bracket Frame $18/EA, FERT001 Engine Mount Bracket $45/EA. 표준가(S) Price Control.', en:'ROH001 Aluminum Sheet $5.50/KG, ROH002 Steel Rod $3.20/KG, HALB001 Bracket Frame $18/EA, FERT001 Engine Mount Bracket $45/EA. Standard (S) Price Control.' }},
+  { no:2,  module:'Master', tcode:'CS01', tx:{ ko:'BOM 생성',                  en:'Create BOM'                       }, dr:null, cr:null, desc:{ ko:'HALB001 BOM: 3×ROH001(3KG) + 1×ROH002(1KG). FERT001 BOM: 1×HALB001 + 0.5×ROH001(0.5KG).', en:'HALB001 BOM: 3×ROH001(3KG) + 1×ROH002(1KG). FERT001 BOM: 1×HALB001 + 0.5×ROH001(0.5KG).' }},
+  { no:3,  module:'Master', tcode:'CA01', tx:{ ko:'공정(Routing) 생성',         en:'Create Routing'                   }, dr:null, cr:null, desc:{ ko:'HALB001: CC001 Labor 1.0h + Machine 0.5h. FERT001: CC002 Labor 0.5h + Machine 0.25h.', en:'HALB001: CC001 Labor 1.0h + Machine 0.5h. FERT001: CC002 Labor 0.5h + Machine 0.25h.' }},
+  { no:4,  module:'CO',     tcode:'KP26', tx:{ ko:'액티비티 단가 계획',          en:'Plan Activity Rates'              }, dr:null, cr:null, desc:{ ko:'CC001 Labor $20/h, Machine $30/h. CC002 Labor $25/h, Machine $40/h. 표준원가 계산 기초.', en:'CC001 Labor $20/h, Machine $30/h. CC002 Labor $25/h, Machine $40/h. Basis for standard cost.' }},
+  { no:5,  module:'CO',     tcode:'CK11N',tx:{ ko:'HALB001 표준원가 계산',      en:'Calculate HALB001 Std Cost'       }, dr:null, cr:null, desc:{ ko:'재료비 $19.70(ROH001 $16.50+ROH002 $3.20) + 노무비 $20.00 + 기계비 $15.00 = 계산가 $54.70. 현 표준가 $18.00.', en:'Material $19.70 (ROH001 $16.50+ROH002 $3.20) + Labor $20.00 + Machine $15.00 = Calc. $54.70. Current std $18.00.' }},
+  { no:6,  module:'CO',     tcode:'CK24', tx:{ ko:'HALB001 표준원가 릴리즈',     en:'Release HALB001 Std Cost'         }, dr:[{a:{ko:'반제품 재고 재평가',en:'Semi-FG Inventory Revaluation'}}], cr:[{a:{ko:'재고재평가손익',en:'Inventory Revaluation P&L'}}], desc:{ ko:'표준가 $18 → $54.70 업데이트. 기존 재고 재평가. 연초 1회 실행.', en:'Std price $18 → $54.70 updated. Existing inventory revalued. Run once at FY start.' }},
+  { no:7,  module:'CO',     tcode:'CK11N',tx:{ ko:'FERT001 표준원가 계산',      en:'Calculate FERT001 Std Cost'       }, dr:null, cr:null, desc:{ ko:'HALB001 $54.70 + ROH001 $2.75 + CC002 Labor $12.50 + Machine $10.00 = 계산가 $79.95. 현 표준가 $45.00.', en:'HALB001 $54.70 + ROH001 $2.75 + CC002 Labor $12.50 + Machine $10.00 = Calc. $79.95. Current std $45.00.' }},
+  { no:8,  module:'CO',     tcode:'CK24', tx:{ ko:'FERT001 표준원가 릴리즈',     en:'Release FERT001 Std Cost'         }, dr:[{a:{ko:'완제품 재고 재평가',en:'FG Inventory Revaluation'}}], cr:[{a:{ko:'재고재평가손익',en:'Inventory Revaluation P&L'}}], desc:{ ko:'표준가 $45 → $79.95 업데이트. HALB001 릴리즈 후 반드시 실행.', en:'Std price $45 → $79.95 updated. Must run after HALB001 release.' }},
+
+  /* ── MM 구매 ── */
+  { no:9,  module:'MM', tcode:'ME21N', tx:{ ko:'구매오더 생성',               en:'Create Purchase Order'            }, dr:null, cr:null, desc:{ ko:'V001 Alcoa Aluminum, ROH001 100KG @$5.00/KG, 총 PO금액 $500. 분개 없음, Commitment 기록.', en:'V001 Alcoa Aluminum, ROH001 100KG @$5.00/KG, PO total $500. No journal, Commitment recorded.' }},
+  { no:10, module:'MM', tcode:'MIGO',  tx:{ ko:'입고 (GR 101)',               en:'Goods Receipt (101)'              }, dr:[{a:{ko:'원재료 ROH001',en:'Raw Material ROH001'}, v:550}], cr:[{a:{ko:'GR/IR',en:'GR/IR Clearing'}, v:500},{a:{ko:'구매가격차이(PPV)',en:'Purchase Price Variance'}, v:50}], desc:{ ko:'100KG × 표준가 $5.50 = $550. PO가 $5.00 → PPV $50 유리(Favorable). GRIR 임시계정 사용.', en:'100KG × std price $5.50 = $550. PO price $5.00 → PPV $50 Favorable. GR/IR clearing used.' }},
+  { no:11, module:'MM', tcode:'MIRO',  tx:{ ko:'송장검증 (IR)',                en:'Invoice Verification'             }, dr:[{a:{ko:'GR/IR',en:'GR/IR Clearing'}, v:500}], cr:[{a:{ko:'AP-V001 매입채무',en:'AP-V001 Accounts Payable'}, v:500}], desc:{ ko:'V001 청구서 $500 처리. PO가와 일치 → 추가 차이 없음. 3-way Matching: PO=GR=IR.', en:'V001 invoice $500 processed. Matches PO price → no additional variance. 3-way Matching: PO=GR=IR.' }},
+  { no:12, module:'MM', tcode:'F-53',  tx:{ ko:'대금 지급',                    en:'Vendor Payment'                   }, dr:[{a:{ko:'AP-V001 매입채무',en:'AP-V001 Accounts Payable'}, v:500}], cr:[{a:{ko:'현금/은행',en:'Cash/Bank'}, v:500}], desc:{ ko:'V001 대금 지급 완료. AP 잔액 $0.', en:'V001 payment completed. AP balance $0.' }},
+
+  /* ── PP 생산 — HALB001 ── */
+  { no:13, module:'PP', tcode:'CO01',  tx:{ ko:'생산오더 생성 (HALB001 20EA)', en:'Create Prod.Order (HALB001 20EA)' }, dr:null, cr:null, desc:{ ko:'HALB001 20EA 생산오더 생성. 분개 없음. BOM/공정 자동 참조. 상태: Created → Released.', en:'HALB001 20EA production order created. No journal. BOM/Routing auto-referenced. Status: Created → Released.' }},
+  { no:14, module:'PP', tcode:'MIGO',  tx:{ ko:'원재료 출고 (GI 261)',         en:'Goods Issue (261) to WIP'         }, dr:[{a:{ko:'WIP 재공품',en:'WIP'}, v:394}], cr:[{a:{ko:'원재료 ROH001 (60KG)',en:'Raw Material ROH001 (60KG)'}, v:330},{a:{ko:'원재료 ROH002 (20KG)',en:'Raw Material ROH002 (20KG)'}, v:64}], desc:{ ko:'BOM 표준 소요량 기준: ROH001 60KG($330) + ROH002 20KG($64) = $394. 재고 감소.', en:'BOM standard qty: ROH001 60KG($330) + ROH002 20KG($64) = $394. Inventory decreases.' }},
+  { no:15, module:'PP', tcode:'CO11N', tx:{ ko:'생산 확정 (HALB001)',           en:'Production Confirm (HALB001)'     }, dr:[{a:{ko:'WIP 재공품 (Activity)',en:'WIP (Activity)'}, v:433.50}], cr:[{a:{ko:'Activity 노무비 (20h)',en:'Activity Labor (20h)'}, v:293.50},{a:{ko:'Activity 기계비 (10h)',en:'Activity Machine (10h)'}, v:140}], desc:{ ko:'실제 생산실적 확정. 계획단가(Labor $14.675/h, Machine $14/h) 적용. 실제단가는 KSS2로 월말 재평가.', en:'Actual production confirmed. Plan rates applied (Labor $14.675/h, Machine $14/h). Revalued at month-end via KSS2.' }},
+  { no:16, module:'PP', tcode:'MIGO',  tx:{ ko:'반제품 입고 (GR 101)',          en:'Semi-FG GR (101)'                 }, dr:[{a:{ko:'반제품 HALB001 (20EA)',en:'Semi-FG HALB001 (20EA)'}, v:360}], cr:[{a:{ko:'생산완성대체 (GBB/AUF)',en:'Factory Output (GBB/AUF)'}, v:360}], desc:{ ko:'표준가 $18 × 20EA = $360 입고. 실제 투입($827.50) vs 표준($360) → 차이 $467.50(불리), KO88에서 정산.', en:'Std price $18 × 20EA = $360 GR. Actual ($827.50) vs std ($360) → variance $467.50 Unfav., settled in KO88.' }},
+
+  /* ── PP 생산 — FERT001 ── */
+  { no:17, module:'PP', tcode:'CO01',  tx:{ ko:'생산오더 생성 (FERT001 10EA)', en:'Create Prod.Order (FERT001 10EA)' }, dr:null, cr:null, desc:{ ko:'FERT001 10EA 생산오더 생성. 분개 없음. HALB001 생산 완료 후 진행.', en:'FERT001 10EA production order created. No journal. Proceed after HALB001 production complete.' }},
+  { no:18, module:'PP', tcode:'MIGO',  tx:{ ko:'출고 (GI 261) — FERT001용',   en:'Goods Issue (261) for FERT001'    }, dr:[{a:{ko:'WIP 재공품',en:'WIP'}, v:207.50}], cr:[{a:{ko:'반제품 HALB001 (10EA)',en:'Semi-FG HALB001 (10EA)'}, v:180},{a:{ko:'원재료 ROH001 (5KG)',en:'Raw Material ROH001 (5KG)'}, v:27.50}], desc:{ ko:'HALB001 10EA($180) + ROH001 5KG($27.50) = $207.50 WIP 계상.', en:'HALB001 10EA($180) + ROH001 5KG($27.50) = $207.50 charged to WIP.' }},
+  { no:19, module:'PP', tcode:'CO11N', tx:{ ko:'생산 확정 (FERT001)',           en:'Production Confirm (FERT001)'     }, dr:[{a:{ko:'WIP 재공품 (Activity)',en:'WIP (Activity)'}, v:212.50}], cr:[{a:{ko:'Activity 노무비 (5h)',en:'Activity Labor (5h)'}, v:125},{a:{ko:'Activity 기계비 (2.5h)',en:'Activity Machine (2.5h)'}, v:87.50}], desc:{ ko:'CC002 계획단가 적용. 자재 $207.50 + 활동 $212.50 = 실제 $420.', en:'CC002 plan rates applied. Material $207.50 + Activity $212.50 = Actual $420.' }},
+  { no:20, module:'PP', tcode:'MIGO',  tx:{ ko:'완성품 입고 (GR 101)',          en:'Finished Goods GR (101)'          }, dr:[{a:{ko:'완제품 FERT001 (10EA)',en:'FG FERT001 (10EA)'}, v:450}], cr:[{a:{ko:'생산완성대체 (GBB/AUF)',en:'Factory Output (GBB/AUF)'}, v:450}], desc:{ ko:'표준가 $45 × 10EA = $450 입고. 실제($420) vs 표준($450) → 차이 -$30(유리), KO88 정산.', en:'Std price $45 × 10EA = $450 GR. Actual ($420) vs std ($450) → variance -$30 Favorable, settled in KO88.' }},
+
+  /* ── PP 오더 정산 ── */
+  { no:21, module:'CO', tcode:'KO88',  tx:{ ko:'오더 정산 — HALB001',          en:'Order Settlement — HALB001'       }, dr:[{a:{ko:'생산정산차이 (불리)',en:'Production Variance (Unfav.)'}, v:467.50}], cr:[{a:{ko:'생산완성대체 (GBB/AUF)',en:'Factory Output (GBB/AUF)'}, v:467.50}], desc:{ ko:'실제 $827.50 - 표준 $360 = $467.50 불리. 반드시 하위 레벨(HALB001) 먼저 정산.', en:'Actual $827.50 - Std $360 = $467.50 Unfavorable. Settle lower-level (HALB001) first.' }},
+  { no:22, module:'CO', tcode:'KO88',  tx:{ ko:'오더 정산 — FERT001',          en:'Order Settlement — FERT001'       }, dr:[{a:{ko:'생산완성대체 (GBB/AUF)',en:'Factory Output (GBB/AUF)'}, v:30}], cr:[{a:{ko:'생산정산차이 (유리)',en:'Production Variance (Favorable)'}, v:30}], desc:{ ko:'실제 $420 - 표준 $450 = -$30 유리. HALB001 정산 완료 후 실행.', en:'Actual $420 - Std $450 = -$30 Favorable. Run after HALB001 settlement.' }},
+
+  /* ── SD 매출 ── */
+  { no:23, module:'SD', tcode:'VA01',  tx:{ ko:'판매오더 생성',                en:'Create Sales Order'               }, dr:null, cr:null, desc:{ ko:'C001 Ford Motor, FERT001 5EA @$150, 총 $750. 분개 없음. CO-PA에 수주 기록.', en:'C001 Ford Motor, FERT001 5EA @$150, total $750. No journal. Order recorded in CO-PA.' }},
+  { no:24, module:'SD', tcode:'VL01N', tx:{ ko:'출하 / PGI (Goods Issue)',      en:'Outbound Delivery / PGI'          }, dr:[{a:{ko:'매출원가 COGS (5EA×$45)',en:'COGS (5EA×$45)'}, v:225}], cr:[{a:{ko:'완제품 FERT001',en:'FG FERT001'}, v:225}], desc:{ ko:'Post Goods Issue: 재고 감소, 표준원가 기준 매출원가 인식. 실제원가는 ML 결산 후 반영.', en:'Post Goods Issue: inventory decreases, COGS recognized at std cost. Actual cost reflected after ML closing.' }},
+  { no:25, module:'SD', tcode:'VF01',  tx:{ ko:'청구 (Invoice/Billing)',         en:'Billing (Customer Invoice)'       }, dr:[{a:{ko:'매출채권 AR (5EA×$150)',en:'AR Receivable (5EA×$150)'}, v:750}], cr:[{a:{ko:'매출액 Revenue',en:'Sales Revenue'}, v:750}], desc:{ ko:'매출 인식. CO-PA에 수익 전기. AR 잔액 $750.', en:'Revenue recognized. Posted to CO-PA. AR balance $750.' }},
+  { no:26, module:'SD', tcode:'F-28',  tx:{ ko:'대금 수취 (AR)',                en:'Incoming Payment (AR)'            }, dr:[{a:{ko:'현금/은행',en:'Cash/Bank'}, v:750}], cr:[{a:{ko:'매출채권 AR',en:'AR Receivable'}, v:750}], desc:{ ko:'고객 대금 수취. AR 잔액 $0.', en:'Customer payment received. AR balance $0.' }},
+
+  /* ── FI/CO 월말 결산 ── */
+  { no:27, module:'CO', tcode:'KSS2',  tx:{ ko:'Activity 단가 재평가',          en:'Revalue Activity Prices'          }, dr:null, cr:null, desc:{ ko:'코스트센터 실제 발생액으로 실제단가 계산. 계획단가와의 차이(Activity Rate Variance) 산출. FI 전표 없음.', en:'Calculate actual activity rates from cost center actuals. Determines Activity Rate Variance vs plan. No FI posting.' }},
+  { no:28, module:'CO', tcode:'CKMLCP',tx:{ ko:'ML 단일레벨 — ROH001',          en:'ML Single-Level — ROH001'         }, dr:[{a:{ko:'ROH001 재고분',en:'ROH001 Inventory portion'}, v:17.50}], cr:[{a:{ko:'ML차이계정 → HALB001 롤업',en:'ML Diff → rollup to HALB001'}, v:50}], desc:{ ko:'ROH001 PPV -$50 배부: 재고분 -$17.50 / 소비분 -$32.50(→HALB001 다음 단계 롤업).', en:'ROH001 PPV -$50 allocated: inventory -$17.50 / consumption -$32.50 (→ rolled up to HALB001 next).' }},
+  { no:29, module:'CO', tcode:'CKMLCP',tx:{ ko:'ML 단일레벨 — HALB001',         en:'ML Single-Level — HALB001'        }, dr:[{a:{ko:'HALB001 재고분',en:'HALB001 Inventory portion'}, v:233.75}], cr:[{a:{ko:'생산정산차이 + ROH 롤업',en:'Prod. Variance + ROH rollup'}, v:467.50}], desc:{ ko:'HALB001 순차이: 생산정산 $467.50 - ROH 소비롤업 $32.50 ≈ $435. 재고분 $217.50 / 소비분 $217.50(→FERT001).', en:'HALB001 net variance: prod $467.50 - ROH rollup $32.50 ≈ $435. Inventory $217.50 / Consump. $217.50 (→FERT001).' }},
+  { no:30, module:'CO', tcode:'CKMLCP',tx:{ ko:'ML 다중레벨 — FERT001',         en:'ML Multi-Level — FERT001'         }, dr:[{a:{ko:'FERT001 차이 배부',en:'FERT001 variance allocated'}}], cr:[{a:{ko:'HALB001 소비분 이전',en:'HALB001 consump. transferred'}}], desc:{ ko:'HALB001 소비분 $217.50 + FERT001 자체 차이(-$30) ≒ $187.50. 재고분 $93.75 / 소비분 $93.75.', en:'HALB001 consump. $217.50 + FERT001 own variance (-$30) ≒ $187.50. Inventory $93.75 / Consump. $93.75.' }},
+  { no:31, module:'CO', tcode:'CKMLCP',tx:{ ko:'ML 결산전기 (Post Closing)',     en:'ML Post Closing'                  }, dr:[{a:{ko:'완제품 FERT001 (재고분)',en:'FG FERT001 (inventory)'}, v:93.75},{a:{ko:'매출원가 (소비분)',en:'COGS (consumption)'}, v:93.75}], cr:[{a:{ko:'ML차이계정',en:'ML Difference Acct'}, v:187.50}], desc:{ ko:'기말재고 실제원가 반영. COGS 실제원가 조정. 결산전기 후 해당 기간 재오픈 불가.', en:'Closing inventory revalued to actual. COGS adjusted to actual. Period cannot be reopened after post closing.' }},
+  { no:32, module:'CO', tcode:'KE27',  tx:{ ko:'CO-PA 실제전기',                en:'CO-PA Actual Posting'             }, dr:null, cr:null, desc:{ ko:'CO-PA 수익성 세그먼트 업데이트: 매출 $750 / 실제 COGS $318.75 / 실제마진 $431.25 (57.5%). FI 전표 없음.', en:'CO-PA profitability segment updated: Revenue $750 / Actual COGS $318.75 / Actual margin $431.25 (57.5%). No FI.' }},
+];
+
+/* =========================================================================
+   GENERIC UI HELPERS
+   ========================================================================= */
+const Card = ({ title, children, className='' }) => (
+  <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
+    {title && <div className="px-4 py-2 border-b border-slate-100 font-semibold text-sm text-slate-700">{title}</div>}
+    <div className="p-4">{children}</div>
+  </div>
+);
+
+const Money = ({ v }) => <span>${Number(v).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:3})}</span>;
+
+/* =========================================================================
+   GUIDE SECTION (collapsible operation guide per tab)
+   ========================================================================= */
+const GuideSection = ({ title, items, lang='ko' }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="mb-4 border border-slate-200 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
+      >
+        <span className="text-sm font-semibold text-slate-700">📖 {title}</span>
+        <span className="text-slate-400 text-xs">{open ? T[lang].guideCollapse : T[lang].guideExpand}</span>
+      </button>
+      {open && (
+        <div className="px-4 py-3 bg-white space-y-3 text-xs text-slate-600 border-t border-slate-100">
+          {items.map((item, i) => (
+            <div key={i} className="flex gap-2">
+              <span className="text-slate-400 shrink-0">{item.icon || '•'}</span>
+              <div>
+                {item.title && <p className="font-semibold text-slate-700 mb-0.5">{item.title}</p>}
+                <p className="leading-relaxed">{item.desc}</p>
+                {item.tcode && (
+                  <span className="inline-block mt-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded font-mono">
+                    T-Code: {item.tcode}
+                  </span>
+                )}
+                {item.note && <p className="mt-1 text-slate-400 italic">{item.note}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* =========================================================================
+   GUIDE DATA (per tab)
+   ========================================================================= */
+const MASTER_GUIDE = [
+  {
+    icon: '🏷️',
+    title: '자재마스터 (Material Master)',
+    desc: 'SAP의 모든 자재는 자재마스터로 정의됩니다. 자재유형(MaterialType)으로 구분: ROH(원자재), HALB(반제품/할브), FERT(완제품/퍼트). 각 자재는 표준가(Standard Price)로 재고를 평가하며, 표준원가 릴리즈 전까지 변경할 수 없습니다.',
+    tcode: 'MM01(생성) / MM02(변경) / MM03(조회)',
+    note: '자재마스터 생성 시 반드시 회사코드 뷰와 플랜트 뷰를 함께 활성화해야 재고관리 및 원가계산이 가능합니다.'
+  },
+  {
+    icon: '🌳',
+    title: 'BOM (Bill of Material — 자재명세서)',
+    desc: '완제품 또는 반제품을 생산하는 데 필요한 구성자재와 소요량을 정의합니다. 멀티레벨 BOM은 FERT→HALB→ROH 순서의 계층구조를 가지며, 원가 롤업은 하위 레벨(ROH)부터 상위 레벨(FERT)로 Bottom-up 방식으로 계산됩니다.',
+    tcode: 'CS01(생성) / CS02(변경) / CS03(조회)',
+    note: '동일 자재코드가 여러 상위 자재의 BOM 구성요소가 될 수 있습니다 (예: ROH001이 HALB001과 FERT001 양쪽에 직접 투입).'
+  },
+  {
+    icon: '📋',
+    title: '공정 (Routing)',
+    desc: '제품 1개를 생산하는 데 투입되는 작업순서와 표준 사이클 타임을 정의합니다. 각 작업은 작업장(Work Center)과 연결되며, 작업장은 코스트센터와 액티비티 유형을 통해 CO 모듈과 연결됩니다.',
+    tcode: 'CA01(생성) / CA03(조회)',
+    note: '공정의 표준 사이클 타임이 표준원가(노무비·기계비) 계산의 기초가 됩니다. 제품(자재마스터) → 공정 → 작업장 → 코스트센터 연결고리를 반드시 이해하세요.'
+  },
+  {
+    icon: '🔄',
+    title: '생산버전 (Production Version)',
+    desc: '공정(Routing)과 BOM의 조합으로 정의되며, 동일 제품을 여러 방식으로 생산할 수 있을 때 각 방법을 하나의 생산버전으로 관리합니다. 생산버전별로 제품원가취합처(PCC)가 생성되어 재료비·노무비·제조경비를 분리 집계합니다.',
+    tcode: 'C223(생산버전 관리)',
+    note: '생산버전이 다르면 투입 재료와 가공비가 달라져 생산원가가 다릅니다. 의사결정(어느 버전이 유리한가?)을 위해 버전별 원가를 별도 관리합니다.'
+  },
+  {
+    icon: '💡',
+    title: 'CSV 업로드 활용 팁',
+    desc: '실제 업무에서 사용하는 자재코드를 CSV로 업로드하면 시뮬레이션을 실제 제품 기준으로 진행할 수 있습니다. BOMLevel과 ParentMaterial 컬럼으로 멀티레벨 구조를 정의하세요. Level 0은 완성품, Level 1은 반제품, Level 2는 원자재입니다.',
+    note: '필수 컬럼: MaterialCode, Description, MaterialType, StandardPrice, UOM, BOMLevel, ParentMaterial, Quantity'
+  }
+];
+
+const MM_GUIDE = [
+  {
+    icon: '🛒',
+    title: '자재마스터 — 원자재 (ROH)',
+    desc: 'SAP 자재유형 ROH(Raw Material)는 외부에서 구매하는 원자재입니다. 자재마스터에는 MRP 파라미터(조달유형: 외부조달), 구매조직 뷰, 회계 뷰(표준원가)가 필수로 설정되어야 합니다.',
+    tcode: 'MM03(자재마스터 조회)',
+    note: '구매조직(Purchasing Organization)은 구매 활동의 기본 조직구조입니다. 일반적으로 플랜트(Plant)와 1:1로 매핑합니다.'
+  },
+  {
+    icon: '📄',
+    title: '구매오더 (Purchase Order)',
+    desc: 'ME21N으로 구매오더를 생성합니다. 공급업체(Vendor), 자재코드, 수량, 단가, 납기일을 입력합니다. PO 생성 시 분개는 발생하지 않으며 Commitment(예산약정)만 기록됩니다. PO 가격이 자재 표준가와 다른 경우 GR 시 구매가격차이(PPV)가 발생합니다.',
+    tcode: 'ME21N(생성) / ME22N(변경) / ME23N(조회)',
+    note: '구매가격차이(PPV) = 표준가 - PO 가격. 표준가 > PO가이면 유리(Favorable), 표준가 < PO가이면 불리(Unfavorable).'
+  },
+  {
+    icon: '📦',
+    title: '입고 처리 (Goods Receipt)',
+    desc: 'MIGO T-code, 이동유형 101로 입고를 처리합니다. 입고 수량 × 자재 표준가로 재고가 계상되며, PO 가격과의 차이는 구매가격차이(PRD) 계정으로 처리됩니다. 동시에 GRIR(Goods Receipt/Invoice Receipt) 임시계정이 PO 가격으로 대변 기록됩니다.',
+    tcode: 'MIGO (이동유형 101)',
+    note: 'GRIR 계정은 GR과 IR 사이의 임시계정입니다. 월말에 GRIR 잔액을 반드시 확인하고 정리해야 합니다.'
+  },
+  {
+    icon: '🧾',
+    title: '송장검증 (Invoice Verification)',
+    desc: 'MIRO로 공급업체의 청구서를 시스템에 입력합니다. PO의 GRIR 계정을 차변 처리하고 외상매입금(AP)을 대변 처리합니다. 청구서 금액이 PO 금액과 다른 경우 허용 오차(Tolerance) 범위 내에서 자동 전기 또는 차단됩니다.',
+    tcode: 'MIRO(송장검증) / MIR4(조회)',
+    note: '3-way Matching: PO(발주) ↔ GR(입고) ↔ IR(송장)이 모두 일치해야 정상 처리됩니다.'
+  },
+  {
+    icon: '💳',
+    title: '대금지급 (Payment)',
+    desc: 'F-53(수동지급) 또는 F110(자동지급프로그램)으로 공급업체에 대금을 지급합니다. 지급 시 외상매입금(AP) 차변, 현금/은행 대변으로 처리됩니다. 지급조건(Payment Terms)에 따라 할인(Discount) 적용이 가능합니다.',
+    tcode: 'F-53(수동지급) / F110(자동지급)',
+    note: 'FBL1N(공급업체 원장)으로 지급 전후 AP 잔액을 반드시 확인하세요.'
+  }
+];
+
+const PP_GUIDE = [
+  {
+    icon: '🏭',
+    title: '생산오더 (Production Order)',
+    desc: 'CO01로 생산오더를 생성합니다. 자재코드, 생산수량, 기준일자, 플랜트, 생산버전을 입력하면 시스템이 BOM과 공정을 참조하여 필요 재료와 작업시간을 자동 계산합니다. 생산오더 생성 시점에는 분개가 발생하지 않습니다.',
+    tcode: 'CO01(생성) / CO02(변경) / CO03(조회)',
+    note: '생산오더의 상태(Created → Released → TECO → Closed)에 따라 가능한 작업이 제한됩니다. 입출고 처리 전 반드시 Released 상태여야 합니다.'
+  },
+  {
+    icon: '⬇️',
+    title: '원재료 출고 (Goods Issue to Production)',
+    desc: 'MIGO, 이동유형 261로 생산오더에 원자재를 투입합니다. BOM의 표준 소요량을 기준으로 자재를 출고하며, 재고에서 WIP(재공품)로 원가가 이전됩니다. 실제 투입량이 표준 소요량과 다를 경우 나중에 오더 정산 시 차이로 반영됩니다.',
+    tcode: 'MIGO (이동유형 261)',
+    note: '수율(Scrap)이 발생한 경우 실제 투입량이 표준보다 많아져 불리한 재료비 차이가 발생합니다.'
+  },
+  {
+    icon: '✅',
+    title: '생산 확정 (Production Confirmation)',
+    desc: 'CO11N으로 생산 실적을 확정합니다. 실제 생산수량, 실제 노무시간, 실제 기계시간을 입력합니다. 입력된 활동(Activity) 시간에 계획단가를 곱하여 WIP에 노무비·기계비가 추가됩니다. 월말에 실제단가(KSS2)로 재평가됩니다.',
+    tcode: 'CO11N(확정) / CO15(집합확정)',
+    note: '생산 확정이 완료되어야 완제품 입고(MIGO 101) 처리가 가능합니다. 확정 취소 시 CO13을 사용하세요.'
+  },
+  {
+    icon: '⬆️',
+    title: '완제품 입고 (Goods Receipt from Production)',
+    desc: 'MIGO, 이동유형 101로 완제품을 창고에 입고합니다. 표준원가(Standard Price) 기준으로 완제품 재고가 증가하고 생산완성대체(GBB/AUF) 계정 대변으로 WIP가 감소합니다. 이 시점에서 표준원가와 실제투입원가의 차이가 발생합니다.',
+    tcode: 'MIGO (이동유형 101)',
+    note: '완제품 입고 후 생산오더의 상태를 TECO(기술완성)로 변경해야 최종 오더 정산(KO88)이 가능합니다.'
+  },
+  {
+    icon: '⚖️',
+    title: '오더 정산 (Order Settlement)',
+    desc: 'KO88으로 생산오더의 원가를 정산합니다. 실제 투입원가(재료비+노무비+기계비)와 표준입고금액의 차이를 계산하여 생산정산차이(PRD/PRF) 계정으로 전기합니다. 이 차이는 ML(Material Ledger) 결산 시 재고/소비에 배부됩니다.',
+    tcode: 'KO88(개별정산) / CO88(집합정산)',
+    note: '정산 순서: 하위 레벨(반제품) 오더부터 정산 후 상위 레벨(완제품) 오더를 정산하세요. 순서가 바뀌면 ML 다중레벨 롤업이 정확하지 않습니다.'
+  }
+];
+
+const FICO_GUIDE = [
+  {
+    icon: '📊',
+    title: 'CO 모듈의 목적',
+    desc: 'CO(Controlling)는 내부 관리회계 모듈로, 제품별 실제원가 계산과 수익성 분석이 최종 목적입니다. FI(재무회계)가 외부 보고용이라면 CO는 경영진의 의사결정(이 제품을 계속 생산할 것인가?)을 지원합니다. CO Object(코스트센터, 내부오더, 수익성세그먼트)가 비용과 수익을 담는 그릇 역할을 합니다.',
+    note: 'CO는 FI와 실시간 연동됩니다. FI 전표 발생 시 CO Object에 동시 반영됩니다.'
+  },
+  {
+    icon: '⚡',
+    title: '액티비티 단가 재평가 (KSS2)',
+    desc: '월중에는 계획단가(Plan Rate)로 노무비·기계비를 계산하지만, 월말 결산 시 코스트센터의 실제 발생액을 기준으로 실제단가를 계산하여 재평가합니다. 실제 급여/전력비 등을 실제 활동시간으로 나누어 시간당 실제단가를 산출합니다.',
+    tcode: 'KSS2(Activity Price Calculation)',
+    note: '계획단가 vs 실제단가 차이가 Activity 차이(Rate Variance)를 발생시킵니다.'
+  },
+  {
+    icon: '📈',
+    title: 'ML 단일레벨 결산 (CKMLCP — Single Level)',
+    desc: 'Material Ledger의 단일레벨 결산은 각 자재별로 독립적으로 차이를 배부합니다. 해당 기간의 총 차이를 소비(출고)와 재고(기말) 수량 비율로 나누어 배부합니다. 원자재(ROH)부터 반제품(HALB) 순서로 하위 레벨부터 실행합니다.',
+    tcode: 'CKMLCP (Single Level)',
+    note: '배부 공식: 소비분 차이 = 총 차이 × (소비량 / 누계량). 소비분 차이는 다음 레벨 자재로 롤업됩니다.'
+  },
+  {
+    icon: '🔄',
+    title: 'ML 다중레벨 결산 (CKMLCP — Multi Level)',
+    desc: '하위 레벨 자재(반제품)의 소비분 차이를 상위 레벨 자재(완제품)로 롤업합니다. 반제품 단일레벨 정산 후 반제품 소비에 배부된 차이가 완제품의 재료비 차이에 합산됩니다. 이 과정으로 완제품의 실제원가가 모든 레벨의 차이를 반영하게 됩니다.',
+    tcode: 'CKMLCP (Multi Level)',
+    note: '다중레벨 롤업 순서: ROH → HALB → FERT. 반드시 단일레벨 완료 후 다중레벨을 실행하세요.'
+  },
+  {
+    icon: '📝',
+    title: '결산전기 (CKMLCP — Post Closing)',
+    desc: 'ML 결산의 마지막 단계로, 계산된 실제원가를 재고와 매출원가에 실제 회계전표로 전기합니다. 재고분 차이는 재고자산 계정(Dr)에 가산되어 기말재고가 실제원가로 재평가되고, 소비분 차이는 매출원가(Dr)에 반영됩니다.',
+    tcode: 'CKMLCP (Post Closing)',
+    note: '결산전기 후에는 해당 기간을 재오픈할 수 없습니다. 신중하게 실행하세요.'
+  },
+  {
+    icon: '💹',
+    title: 'CO-PA 실제전기 (KE27)',
+    desc: '수익성분석(CO-PA)에 실제원가를 반영합니다. 표준원가 기준의 매출원가가 ML 결산 후 실제원가로 재평가되어 수익성세그먼트(고객/제품/지역별)의 실제 마진을 확인할 수 있습니다. CO-PA는 경영진의 제품별·고객별 수익성 의사결정에 사용됩니다.',
+    tcode: 'KE27(실제전기) / KE30(CO-PA 보고서)',
+    note: 'CO-PA의 최종 마진 = 매출액 - 실제매출원가(표준원가 + ML 원가조정). 이것이 CO 모듈의 최종 목적입니다.'
+  }
+];
+
+const SD_GUIDE = [
+  {
+    icon: '👥',
+    title: '고객마스터 (Customer Master)',
+    desc: 'SD 모듈에서 제품을 판매할 고객 정보를 관리합니다. 고객 코드, 주소, 지급조건, 영업조직별 가격그룹이 정의됩니다. 고객마스터는 FI의 매출채권(AR) 관리와도 연결됩니다.',
+    tcode: 'VD01(생성) / VD03(조회)',
+    note: '영업조직(Sales Org) / 유통채널(Dist. Channel) / 사업부(Division)의 조합으로 판매 채널을 구분 관리합니다.'
+  },
+  {
+    icon: '📋',
+    title: '판매오더 (Sales Order)',
+    desc: 'VA01로 판매오더를 생성합니다. 고객, 자재코드, 판매수량, 판매단가, 출하일을 입력합니다. 판매오더 생성 시 분개는 발생하지 않으며 수주 잔량(Order Backlog)으로 관리됩니다. 가격 결정은 Condition Type(조건유형)을 통해 자동 계산됩니다.',
+    tcode: 'VA01(생성) / VA02(변경) / VA03(조회)',
+    note: '판매오더와 동시에 CO-PA에 수주 데이터가 전기되어 수익성 계획 대비 실적 모니터링이 가능합니다.'
+  },
+  {
+    icon: '🚛',
+    title: '출하처리 (Outbound Delivery)',
+    desc: 'VL01N으로 출하를 처리합니다. Picking(피킹) 후 Post Goods Issue(PGI) 단계에서 재고에서 완제품이 출고되며 매출원가(COGS)가 인식됩니다. COGS는 자재의 표준원가 기준으로 계산됩니다(실제원가는 ML 결산 후 반영).',
+    tcode: 'VL01N(출하생성) / VL02N(변경) / VL03N(조회)',
+    note: 'Post Goods Issue 시 분개: Dr 매출원가 / Cr 완제품재고. 이 시점에 재고가 실제로 감소합니다.'
+  },
+  {
+    icon: '🧾',
+    title: '청구 (Billing)',
+    desc: 'VF01로 청구서(세금계산서)를 생성합니다. 매출채권(AR)과 매출액을 인식하는 FI 전표가 자동 생성되고, 동시에 CO-PA에 매출 데이터가 전기됩니다. B2B 제조업 간 거래에서는 일반적으로 판매세(Sales Tax) 처리가 별도로 필요합니다.',
+    tcode: 'VF01(청구생성) / VF02(변경) / VF03(조회)',
+    note: '청구 취소 시 VF11을 사용합니다. 취소 후 재청구 가능하지만 회계기간이 마감된 경우 별도 처리가 필요합니다.'
+  },
+  {
+    icon: '💰',
+    title: '수취 및 AR 관리',
+    desc: 'F-28(수동)로 고객으로부터 대금을 수취합니다. AR 잔액은 FBL5N(고객 원장)으로 확인합니다. 연체 채권 관리를 위해 F150(자동독촉)을 활용하고, 대손충당금은 별도 FI 처리가 필요합니다.',
+    tcode: 'F-28(수동수취) / F110(자동지급) / FBL5N(고객원장)',
+    note: '매출채권 회전율(DSO, Days Sales Outstanding)은 AR 잔액 ÷ (매출액/365)로 계산합니다. 이 지표가 재무팀의 주요 KPI입니다.'
+  }
+];
+
+/* =========================================================================
+   JOURNAL POPUP
+   ========================================================================= */
+const JournalPopup = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4" onClick={e=>e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-4 py-3 rounded-t-xl flex justify-between items-center">
+          <div>
+            <span className="bg-white/20 text-xs px-2 py-0.5 rounded font-mono mr-2">{data.tcode}</span>
+            <span className="font-bold text-sm">{data.title}</span>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
+        </div>
+        <div className="p-4 space-y-1.5 max-h-80 overflow-y-auto">
+          {data.lines.map((line, i) => (
+            <div key={i} className={`p-2 rounded text-xs font-mono
+              ${line.type==='Dr' ? 'bg-red-50 border-l-3 border-red-400' :
+                line.type==='Cr' ? 'bg-blue-50 border-l-3 border-blue-400' :
+                'bg-gray-50 text-gray-500 italic'}`}>
+              {line.type && <span className={`font-bold mr-2 ${line.type==='Dr'?'text-red-700':'text-blue-700'}`}>{line.type}</span>}
+              <span>{line.account}</span>
+              {line.amount != null && <span className="float-right font-semibold">{typeof line.amount === 'number' ? `$${Number(line.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}` : line.amount}</span>}
+            </div>
+          ))}
+          {data.note && <p className="text-xs text-gray-500 mt-2 p-2 bg-yellow-50 rounded">💡 {data.note}</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   STEP BUTTON
+   ========================================================================= */
+const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData, onExecute, onCancel, openPopup, disabled=false, lang='ko' }) => {
+  const colors = {
+    blue:'bg-blue-500 hover:bg-blue-600', orange:'bg-orange-500 hover:bg-orange-600',
+    indigo:'bg-indigo-500 hover:bg-indigo-600', teal:'bg-teal-500 hover:bg-teal-600',
+    green:'bg-green-500 hover:bg-green-600', purple:'bg-purple-500 hover:bg-purple-600',
+    red:'bg-red-500 hover:bg-red-600'
+  };
+  const done = !!steps[stepKey];
+  const execute = () => {
+    if (disabled) return;
+    setSteps(prev => ({ ...prev, [stepKey]: true }));
+    if (journalData) openPopup(journalData);
+    onExecute?.();
+  };
+  const cancel = () => {
+    const keys = Object.keys(steps);
+    const idx = keys.indexOf(stepKey);
+    setSteps(prev => {
+      const next = { ...prev };
+      keys.slice(idx).forEach(k => { next[k] = false; });
+      return next;
+    });
+    onCancel?.();
+  };
+  return (
+    <div className="flex gap-0.5 mb-1 items-center">
+      <button onClick={execute} disabled={done || disabled}
+        className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-all
+          ${done ? 'bg-green-100 text-green-700 border border-green-300'
+                 : disabled ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                 : `${colors[color]} text-white shadow-sm`}`}>
+        {done ? '✓' : '▶'} {label}
+      </button>
+      {done && (
+        <>
+          {journalData && <button onClick={() => openPopup(journalData)}
+            className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-600 hover:bg-blue-200">{T[lang].journalBtn}</button>}
+          <button onClick={cancel} className="px-2 py-1 rounded text-xs bg-red-100 text-red-600 hover:bg-red-200">↺</button>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* =========================================================================
+   BOM TREE
+   ========================================================================= */
+const BOMTree = ({ materials, lang='ko' }) => {
+  const roots = materials.filter(m => String(m.BOMLevel) === '0');
+  const getChildren = (parentCode, level) =>
+    materials.filter(m => m.ParentMaterial === parentCode && String(m.BOMLevel) === String(level));
+  const typeColor = { FERT:'bg-blue-100 text-blue-800', HALB:'bg-orange-100 text-orange-800', ROH:'bg-green-100 text-green-800' };
+
+  const BOMNode = ({ mat, depth=0 }) => {
+    const children = getChildren(mat.MaterialCode, parseInt(mat.BOMLevel)+1);
+    return (
+      <div>
+        <div className="flex items-center gap-2 py-1" style={{ paddingLeft: depth*20 }}>
+          {depth > 0 && <span className="text-gray-400 text-xs">└─</span>}
+          <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${typeColor[mat.MaterialType]||'bg-gray-100'}`}>
+            {mat.MaterialType}
+          </span>
+          <span className="text-sm font-mono font-medium">{mat.MaterialCode}</span>
+          <span className="text-xs text-gray-600">{mat.Description}</span>
+          {mat.Quantity && <span className="text-xs text-gray-400">× {mat.Quantity} {mat.UOM}</span>}
+          <span className="text-xs text-blue-600 ml-auto font-semibold">${parseFloat(mat.StandardPrice).toFixed(2)}</span>
+        </div>
+        {children.map((c,i) => <BOMNode key={i} mat={c} depth={depth+1} />)}
+      </div>
+    );
+  };
+
+  if (roots.length === 0) return <p className="text-gray-400 text-sm p-4">{lang==='ko'?'자재를 업로드하면 BOM 트리가 표시됩니다':'Upload materials to display the BOM tree'}</p>;
+  return <div>{roots.map((r,i) => <BOMNode key={i} mat={r} />)}</div>;
+};
+
+/* =========================================================================
+   CSV PARSER
+   ========================================================================= */
+function parseCSV(text) {
+  const lines = text.replace(/\r/g,'').split('\n').filter(l => l.trim() !== '');
+  if (lines.length < 2) throw new Error('CSV 데이터가 비어 있습니다');
+  const header = lines[0].split(',').map(h => h.trim());
+  const missing = REQUIRED_CSV_COLS.filter(c => !header.includes(c));
+  if (missing.length > 0) throw new Error('필수 컬럼 누락: ' + missing.join(', '));
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(',').map(c => c.trim());
+    const obj = {};
+    header.forEach((h, idx) => { obj[h] = cells[idx] !== undefined ? cells[idx] : ''; });
+    if (!obj.MaterialCode) continue;
+    rows.push(obj);
+  }
+  if (rows.length === 0) throw new Error('유효한 자재 행이 없습니다');
+  return rows;
+}
+
+/* =========================================================================
+   INVENTORY TABLE
+   ========================================================================= */
+const InvTable = ({ rows, lang='ko' }) => (
+  <table className="w-full text-xs">
+    <thead>
+      <tr className="text-slate-500 border-b border-slate-200">
+        <th className="text-left py-1">{T[lang].colMat}</th>
+        <th className="text-right py-1">{T[lang].colQty}</th>
+        <th className="text-right py-1">{T[lang].colAmt}</th>
+        <th className="text-right py-1">{T[lang].colUP}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows.map((r,i)=>(
+        <tr key={i} className="border-b border-slate-50">
+          <td className="py-1 font-mono">{r.code}</td>
+          <td className="py-1 text-right">{r.qty.toLocaleString()} {r.uom}</td>
+          <td className="py-1 text-right font-medium"><Money v={r.amt}/></td>
+          <td className="py-1 text-right text-slate-500"><Money v={r.qty?r.amt/r.qty:0}/></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+);
+
+/* =========================================================================
+   TAB 1: MASTER / BOM
+   ========================================================================= */
+const MasterTab = ({ materials, setMaterials, ckSteps, setCkSteps, openPopup, lang='ko' }) => {
+  const t = T[lang];
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleFile = (e) => {
+    setError(''); setSuccess('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const rows = parseCSV(String(ev.target.result));
+        setMaterials(rows);
+        setSuccess(`업로드 성공: ${rows.length}개 자재 반영됨`);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const resetDefault = () => {
+    setMaterials(DEFAULT_MATERIALS);
+    setError(''); setSuccess('기본 마스터데이터로 복원되었습니다');
+  };
+
+  // unique material list (by code, prefer lowest BOMLevel definition)
+  const uniqueMats = useMemo(() => {
+    const map = {};
+    materials.forEach(m => { if (!map[m.MaterialCode]) map[m.MaterialCode] = m; });
+    return Object.values(map);
+  }, [materials]);
+
+  // cost rollup (bottom-up) using standard prices and BOM quantities
+  const rollup = useMemo(() => {
+    const std = (code) => {
+      const m = uniqueMats.find(x => x.MaterialCode === code);
+      return m ? parseFloat(m.StandardPrice) : 0;
+    };
+    const compFor = (parent) => materials.filter(m => m.ParentMaterial === parent);
+    return uniqueMats.filter(m => m.MaterialType !== 'ROH').map(m => {
+      const comps = compFor(m.MaterialCode);
+      const rolled = comps.reduce((s,c)=> s + std(c.MaterialCode)*parseFloat(c.Quantity||'0'), 0);
+      return { code:m.MaterialCode, type:m.MaterialType, std:parseFloat(m.StandardPrice), rolled, comps };
+    });
+  }, [uniqueMats, materials]);
+
+  const typeColor = { FERT:'bg-blue-100 text-blue-800', HALB:'bg-orange-100 text-orange-800', ROH:'bg-green-100 text-green-800' };
+
+  return (
+    <div>
+      <GuideSection title={t.masterGuideTitle} items={MASTER_GUIDE} lang={lang} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="lg:col-span-3 space-y-4">
+        <Card title={t.csvTitle}>
+          <p className="text-xs text-slate-500 mb-2">
+            필수 컬럼: {REQUIRED_CSV_COLS.join(', ')}
+          </p>
+          <div className="flex gap-2 items-center">
+            <label className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded cursor-pointer">
+              {t.csvBtn}
+              <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+            </label>
+            <button onClick={resetDefault} className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded">
+              {t.csvReset}
+            </button>
+          </div>
+          {error && <div className="mt-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">⛔ {error}</div>}
+          {success && <div className="mt-2 p-2 bg-green-50 text-green-700 text-xs rounded border border-green-200">✓ {success}</div>}
+        </Card>
+
+        <Card title={lang==='ko'?'📋 자재 목록':'📋 Material List'}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-500 border-b border-slate-200">
+                <th className="text-left py-1">{t.colCode}</th>
+                <th className="text-left py-1">{t.colDesc}</th>
+                <th className="text-center py-1">{t.colType}</th>
+                <th className="text-right py-1">{t.colStd}</th>
+                <th className="text-center py-1">{t.colUnit}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uniqueMats.map((m,i)=>(
+                <tr key={i} className="border-b border-slate-50">
+                  <td className="py-1 font-mono font-medium">{m.MaterialCode}</td>
+                  <td className="py-1 text-slate-600">{m.Description}</td>
+                  <td className="py-1 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${typeColor[m.MaterialType]||'bg-gray-100'}`}>{m.MaterialType}</span>
+                  </td>
+                  <td className="py-1 text-right">${parseFloat(m.StandardPrice).toFixed(2)}</td>
+                  <td className="py-1 text-center text-slate-500">{m.UOM}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card title={t.stdCostTitle}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.stdCostDesc}
+          </p>
+          <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="kp26" label={t.btnKP26} color="purple" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.kp26[lang]} />
+          <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck11n_h" label={t.btnCK11N_H} color="purple" disabled={!ckSteps.kp26} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ck11n_h[lang]} />
+          <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck24_h" label={t.btnCK24_H} color="purple" disabled={!ckSteps.ck11n_h} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ck24_h[lang]} />
+          <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck11n_f" label={t.btnCK11N_F} color="purple" disabled={!ckSteps.ck24_h} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ck11n_f[lang]} />
+          <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck24_f" label={t.btnCK24_F} color="purple" disabled={!ckSteps.ck11n_f} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ck24_f[lang]} />
+        </Card>
+      </div>
+
+      <div className="lg:col-span-2 space-y-4">
+        <Card title={t.bomTitle}>
+          <BOMTree materials={materials} lang={lang} />
+        </Card>
+        <Card title={t.rollupTitle}>
+          {rollup.length === 0 && <p className="text-xs text-slate-400">{lang==='ko'?'완성품/반제품 없음':'No finished/semi-finished goods'}</p>}
+          {rollup.map((r,i)=>(
+            <div key={i} className="mb-2 text-xs border-b border-slate-50 pb-2">
+              <div className="flex justify-between font-medium">
+                <span className="font-mono">{r.code} <span className="text-slate-400">({r.type})</span></span>
+                <span>{lang==='ko'?'표준':'Std'} ${r.std.toFixed(2)}</span>
+              </div>
+              <div className="text-slate-500 mt-0.5">
+                {lang==='ko'?'구성 롤업':'Rollup'}: ${r.rolled.toFixed(2)} {t.rollupMat}
+                {r.comps.map((c,j)=>(
+                  <div key={j} className="pl-3">└ {c.MaterialCode} × {c.Quantity}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        <Card title={t.stdCostResult}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-500 border-b border-slate-200">
+                <th className="text-left py-1">{t.colCode}</th>
+                <th className="text-right py-1">{t.colCurr}</th>
+                <th className="text-right py-1">{t.colCalc}</th>
+                <th className="text-right py-1">{t.colStatus}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 font-mono font-medium">HALB001</td>
+                <td className="py-1 text-right">$18.00</td>
+                <td className="py-1 text-right text-purple-600 font-medium">$54.70</td>
+                <td className="py-1 text-right">
+                  {ckSteps.ck24_h
+                    ? <span className="text-green-600 font-medium">{t.stdReleased}</span>
+                    : <span className="text-slate-400">{t.stdNotReleased}</span>}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 font-mono font-medium">FERT001</td>
+                <td className="py-1 text-right">$45.00</td>
+                <td className="py-1 text-right text-purple-600 font-medium">$79.95</td>
+                <td className="py-1 text-right">
+                  {ckSteps.ck24_f
+                    ? <span className="text-green-600 font-medium">{t.stdReleased}</span>
+                    : <span className="text-slate-400">{t.stdNotReleased}</span>}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 2: MM PURCHASING
+   ========================================================================= */
+const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lang='ko', mmReturnSteps, setMmReturnSteps, miSteps, setMiSteps, sdebSteps, setSdebSteps }) => {
+  const t = T[lang];
+  return (
+    <div>
+      <GuideSection title={t.mmGuideTitle} items={MM_GUIDE} lang={lang} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="lg:col-span-3 space-y-4">
+        <Card title={`🛒 ${t.mmScenTitle}`}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.mmScenDesc}
+          </p>
+          <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="me21n" label={t.btnME21N} color="blue" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.me21n[lang]} />
+          <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="migo_gr" label={t.btnMIGO_GR} color="blue" disabled={!mmSteps.me21n} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.migo_gr[lang]} />
+          <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="miro" label={t.btnMIRO} color="blue" disabled={!mmSteps.migo_gr} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.miro[lang]} />
+          <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="f53" label={t.btnF53} color="blue" disabled={!mmSteps.miro} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.f53[lang]} />
+        </Card>
+
+        <Card title={t.retTitle}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.retDesc}
+          </p>
+          <StepButton steps={mmReturnSteps} setSteps={setMmReturnSteps} stepKey="ret_po" label={t.btnRetPO} color="red" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.me21n_ret[lang]} />
+          <StepButton steps={mmReturnSteps} setSteps={setMmReturnSteps} stepKey="ret_migo" label={t.btnRetMIGO} color="red" disabled={!mmReturnSteps.ret_po} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.migo_ret[lang]} />
+        </Card>
+
+        <Card title={t.miTitle}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.miDesc}
+          </p>
+          <StepButton steps={miSteps} setSteps={setMiSteps} stepKey="mi01" label={t.btnMI01} color="green" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.mi01[lang]} />
+          <StepButton steps={miSteps} setSteps={setMiSteps} stepKey="mi04" label={t.btnMI04} color="green" disabled={!miSteps.mi01} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.mi04[lang]} />
+          <StepButton steps={miSteps} setSteps={setMiSteps} stepKey="mi07" label={t.btnMI07} color="green" disabled={!miSteps.mi04} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.mi07[lang]} />
+        </Card>
+
+        {/* ── 후속 차변 시나리오 ── */}
+        <Card title={t.sdTitle}>
+          <p className="text-xs text-slate-500 mb-2">{t.sdContext}</p>
+          <p className="text-xs text-slate-600 mb-3">{t.sdDesc}</p>
+
+          {/* 시나리오 1: 운임 후속 차변 */}
+          <div className="mb-3">
+            <p className="text-xs font-semibold text-amber-700 mb-1.5">{t.sdNote1}</p>
+            <StepButton steps={sdebSteps} setSteps={setSdebSteps} stepKey="miro_sd" label={t.btnMiroSD} color="orange" lang={lang} openPopup={openPopup}
+              journalData={JOURNAL_DATA.miro_sd[lang]} />
+            <StepButton steps={sdebSteps} setSteps={setSdebSteps} stepKey="f53_sd" label={t.btnF53SD} color="orange" disabled={!sdebSteps.miro_sd} lang={lang} openPopup={openPopup}
+              journalData={JOURNAL_DATA.f53_sd[lang]} />
+          </div>
+
+          {/* 시나리오 2: 관세 후속 차변 (독립 실행 가능) */}
+          <div>
+            <p className="text-xs font-semibold text-amber-700 mb-1.5">{t.sdNote2}</p>
+            <StepButton steps={sdebSteps} setSteps={setSdebSteps} stepKey="miro_sd2" label={t.btnMiroSD2} color="orange" lang={lang} openPopup={openPopup}
+              journalData={JOURNAL_DATA.miro_sd2[lang]} />
+          </div>
+
+          {/* ML 안내 */}
+          {(sdebSteps.miro_sd || sdebSteps.miro_sd2) && (
+            <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+              {t.sdMLNote}
+            </div>
+          )}
+        </Card>
+      </div>
+      <div className="lg:col-span-2 space-y-4">
+        <Card title={t.invTable}>
+          <InvTable rows={mmInv} lang={lang} />
+          {mmReturnSteps.ret_migo && (
+            <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-700">
+              ↩ {lang==='ko'?'반품 처리: ROH001 20KG 출고 → 재고 감소 $110':'Return: ROH001 20KG issued → Inventory -$110'}
+            </div>
+          )}
+        </Card>
+        <Card title={t.diffTable}>
+          <table className="w-full text-xs">
+            <tbody>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.labelPPV}</td>
+                <td className="py-1 text-right font-medium text-green-600">{priceVar>0?`-$${priceVar.toFixed(2)} ${lang==='ko'?'유리':'Fav.'}`:'$0.00'}</td>
+              </tr>
+              {(sdebSteps.miro_sd || sdebSteps.miro_sd2) && (
+                <tr className="border-b border-slate-50">
+                  <td className="py-1 text-slate-600">{t.sdResultLabel}</td>
+                  <td className="py-1 text-right font-medium text-amber-600">
+                    +${((sdebSteps.miro_sd ? 30 : 0) + (sdebSteps.miro_sd2 ? 15 : 0)).toFixed(2)} {lang==='ko'?'불리':'Unfav.'}
+                  </td>
+                </tr>
+              )}
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.labelAP}</td>
+                <td className="py-1 text-right font-medium"><Money v={apBalance + (sdebSteps.miro_sd && !sdebSteps.f53_sd ? 30 : 0)}/></td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 3: PP PRODUCTION
+   ========================================================================= */
+const PPTab = ({ ppSteps, setPpSteps, openPopup, ppInv, wip, ppVar, lang='ko' }) => {
+  const t = T[lang];
+  const phase1Done = ppSteps.co01_h && ppSteps.gi_h && ppSteps.co11n_h && ppSteps.gr_h;
+  return (
+    <div>
+      <GuideSection title={t.ppGuideTitle} items={PP_GUIDE} lang={lang} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="lg:col-span-3 space-y-4">
+        <Card title={`🏭 ${t.ppPhase1Title}`}>
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co01_h" label={t.btnCO01_H} color="orange" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.co01_h[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gi_h" label={t.btnGI_H} color="orange" disabled={!ppSteps.co01_h} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.gi_h[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co11n_h" label={t.btnCO11N_H} color="orange" disabled={!ppSteps.gi_h} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.co11n_h[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gr_h" label={t.btnGR_H} color="orange" disabled={!ppSteps.co11n_h} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.gr_h[lang]} />
+        </Card>
+
+        <Card title={`🏭 ${t.ppPhase2Title}`} className={phase1Done?'':'opacity-50'}>
+          {!phase1Done && <p className="text-xs text-amber-600 mb-2">{t.ppPhase2Lock}</p>}
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co01_f" label={t.btnCO01_F} color="orange" disabled={!phase1Done} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.co01_f[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gi_f" label={t.btnGI_F} color="orange" disabled={!phase1Done} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.gi_f[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co11n_f" label={t.btnCO11N_F} color="orange" disabled={!ppSteps.gi_f} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.co11n_f[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gr_f" label={t.btnGR_F} color="orange" disabled={!ppSteps.co11n_f} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.gr_f[lang]} />
+        </Card>
+
+        <Card title={t.ppSettleTitle}>
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="ko88_h" label={t.btnKO88_H} color="orange" disabled={!ppSteps.gr_f} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ko88_h[lang]} />
+          <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="ko88_f" label={t.btnKO88_F} color="orange" disabled={!ppSteps.ko88_h} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ko88_f[lang]} />
+        </Card>
+      </div>
+
+      <div className="lg:col-span-2 space-y-4">
+        <Card title={t.invTable}>
+          <InvTable rows={ppInv} lang={lang} />
+        </Card>
+        <Card title={t.wipTable}>
+          <table className="w-full text-xs">
+            <tbody>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.wipHALB}</td>
+                <td className="py-1 text-right font-medium"><Money v={wip.halb}/></td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.wipFERT}</td>
+                <td className="py-1 text-right font-medium"><Money v={wip.fert}/></td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+        <Card title={t.diffStatus}>
+          <table className="w-full text-xs">
+            <tbody>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.varHALB}</td>
+                <td className={`py-1 text-right font-medium ${ppVar.halb>0?'text-red-600':'text-slate-400'}`}>
+                  {ppVar.halb>0?`$${ppVar.halb.toFixed(2)} ${lang==='ko'?'불리':'Unfav.'}`:'$0.00'}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.varFERT}</td>
+                <td className={`py-1 text-right font-medium ${ppVar.fert<0?'text-green-600':'text-slate-400'}`}>
+                  {ppVar.fert<0?`-$${Math.abs(ppVar.fert).toFixed(2)} ${lang==='ko'?'유리':'Fav.'}`:'$0.00'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 4: FI/CO MATERIAL LEDGER
+   ========================================================================= */
+const CKM3Table = ({ title, rows, lang='ko' }) => (
+  <Card title={title}>
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="text-slate-500 border-b border-slate-200">
+          <th className="text-left py-1">{T[lang].ckm3Cat}</th>
+          <th className="text-right py-1">{T[lang].colQty}</th>
+          <th className="text-right py-1">{T[lang].ckm3Prelim}</th>
+          <th className="text-right py-1">{T[lang].ckm3Var}</th>
+          <th className="text-right py-1">{T[lang].colUP}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r,i)=>(
+          <tr key={i} className={`border-b border-slate-50 ${r.bold?'font-semibold bg-slate-50':''}`}>
+            <td className="py-1">{r.label}</td>
+            <td className="py-1 text-right">{r.qty}</td>
+            <td className="py-1 text-right">{r.prelim}</td>
+            <td className={`py-1 text-right ${r.diffColor||''}`}>{r.diff}</td>
+            <td className="py-1 text-right">{r.price}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </Card>
+);
+
+const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Steps, setMr21Steps }) => {
+  const t = T[lang];
+  const rohRows = [
+    { label:t.ckm3Opening, qty:'0 KG', prelim:'$0.00', diff:'$0.00', price:'-' },
+    { label:t.ckm3Receipt, qty:'100 KG', prelim:'$550.00', diff:'-$50.00', diffColor:'text-green-600', price:'$5.00' },
+    { label:t.ckm3Cumul, qty:'100 KG', prelim:'$550.00', diff:'-$50.00', diffColor:'text-green-600', price:'$5.00', bold:true },
+    { label:t.ckm3Consump, qty:'65 KG', prelim:'-$357.50', diff:'-$32.50', diffColor:'text-green-600', price:'$5.00' },
+    { label:t.ckm3Closing, qty:'35 KG', prelim:'$192.50', diff:'-$17.50', diffColor:'text-green-600', price:'$5.00', bold:true },
+  ];
+  const halbRows = [
+    { label:t.ckm3Opening, qty:'0 EA', prelim:'$0.00', diff:'$0.00', price:'-' },
+    { label:t.ckm3Receipt, qty:'20 EA', prelim:'$360.00', diff:'+$467.50', diffColor:'text-red-600', price:'$41.38' },
+    { label:t.ckm3Cumul, qty:'20 EA', prelim:'$360.00', diff:'+$467.50', diffColor:'text-red-600', price:'$41.38', bold:true },
+    { label:t.ckm3Consump, qty:'10 EA', prelim:'-$180.00', diff:'+$233.75', diffColor:'text-red-600', price:'$41.38' },
+    { label:t.ckm3Closing, qty:'10 EA', prelim:'$180.00', diff:'+$233.75', diffColor:'text-red-600', price:'$41.38', bold:true },
+  ];
+  const fertRows = [
+    { label:t.ckm3Opening, qty:'0 EA', prelim:'$0.00', diff:'$0.00', price:'-' },
+    { label:t.ckm3Receipt, qty:'10 EA', prelim:'$450.00', diff:'+$203.75', diffColor:'text-red-600', price:'$65.38' },
+    { label:t.ckm3Cumul, qty:'10 EA', prelim:'$450.00', diff:'+$203.75', diffColor:'text-red-600', price:'$65.38', bold:true },
+    { label:t.ckm3Consump, qty:'5 EA', prelim:'-$225.00', diff:'+$101.875', diffColor:'text-red-600', price:'$65.38' },
+    { label:t.ckm3Closing, qty:'5 EA', prelim:'$225.00', diff:'+$101.875', diffColor:'text-red-600', price:'$65.38', bold:true },
+  ];
+
+  return (
+    <div>
+      <GuideSection title={t.ficoGuideTitle} items={FICO_GUIDE} lang={lang} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="lg:col-span-3 space-y-4">
+        <Card title={`🧮 ${t.ficoCardTitle}`}>
+          <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="kss2" label={t.btnKSS2} color="indigo" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.kss2[lang]} />
+          <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="sl_roh" label={t.btnSL_ROH} color="indigo" disabled={!ficoSteps.kss2} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.sl_roh[lang]} />
+          <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="sl_halb" label={t.btnSL_HALB} color="indigo" disabled={!ficoSteps.sl_roh} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.sl_halb[lang]} />
+          <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="ml" label={t.btnML} color="indigo" disabled={!ficoSteps.sl_halb} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ml[lang]} />
+          <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="pc" label={t.btnPC} color="indigo" disabled={!ficoSteps.ml} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ml_pc[lang]} />
+          <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="ke27" label={t.btnKE27} color="indigo" disabled={!ficoSteps.pc} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.ke27[lang]} />
+        </Card>
+
+        <Card title={t.mr21CardTitle}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.mr21Desc}
+          </p>
+          <StepButton steps={mr21Steps} setSteps={setMr21Steps} stepKey="mr21" label={t.btnMR21} color="orange" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.mr21[lang]} />
+        </Card>
+
+        <div className="grid grid-cols-1 gap-4">
+          <div>
+            {/* MM에서 발생한 PPV 연결 표시 */}
+            <div className="flex items-center gap-2 mb-2 text-xs">
+              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-mono">MM→CO</span>
+              <span className="text-slate-500">{t.mmConnBadge.split('{ppv}')[0]}<strong className="text-green-600">-$50.00 {lang==='ko'?'유리':'Fav.'}</strong>{t.mmConnBadge.split('{ppv}')[1]}</span>
+            </div>
+            <CKM3Table title={`📑 ${t.ckm3ROH}`} rows={rohRows} lang={lang} />
+          </div>
+          <CKM3Table title={`📑 ${t.ckm3HALB}`} rows={halbRows} lang={lang} />
+          <CKM3Table title={`📑 ${t.ckm3FERT}`} rows={fertRows} lang={lang} />
+        </div>
+      </div>
+
+      <div className="lg:col-span-2 space-y-4">
+        <Card title={t.copaTitle}>
+          <table className="w-full text-sm">
+            <tbody>
+              <tr className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-600">{t.copaRevenue}</td>
+                <td className="py-1.5 text-right font-medium"><Money v={750}/></td>
+              </tr>
+              <tr className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-600">{t.copaCOGS}</td>
+                <td className="py-1.5 text-right">-<Money v={225}/></td>
+              </tr>
+              <tr className="border-b border-slate-100 font-semibold">
+                <td className="py-1.5">{t.copaStdMargin}</td>
+                <td className="py-1.5 text-right text-green-600"><Money v={525}/> (70%)</td>
+              </tr>
+              <tr className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-600">{t.copaMLAdj}</td>
+                <td className="py-1.5 text-right text-red-600">{ficoSteps.pc?'-$101.875':'$0.00'}</td>
+              </tr>
+              <tr className="font-semibold">
+                <td className="py-1.5">{t.copaActMargin}</td>
+                <td className="py-1.5 text-right text-indigo-600">
+                  {ficoSteps.pc?<span><Money v={423.125}/> (56.4%)</span>:<span><Money v={525}/> (70%)</span>}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500 space-y-0.5">
+            <p>{t.ficoFlow1}</p>
+            <p>{t.ficoFlow2}</p>
+            <p>{t.ficoFlow3}</p>
+            <p>{t.ficoFlow4}</p>
+          </div>
+        </Card>
+        {mr21Steps.mr21 && (
+          <div className="bg-orange-50 rounded-lg p-3 text-xs mt-3">
+            <p className="font-semibold text-orange-800 mb-1">{t.mr21Result}</p>
+            <div className="flex justify-between"><span>{lang==='ko'?'HALB001 재고 10EA':'HALB001 Inventory 10EA'}</span></div>
+            <div className="flex justify-between"><span>{t.mr21OldStd}</span><span>$18.00</span></div>
+            <div className="flex justify-between"><span>{t.mr21NewStd}</span><span>$41.375</span></div>
+            <div className="flex justify-between font-semibold text-orange-700"><span>{t.mr21Diff}</span><span>+$233.75</span></div>
+          </div>
+        )}
+        <Card title={t.closeStatus}>
+          <ul className="text-xs space-y-1 text-slate-600">
+            <li>{ficoSteps.kss2?'✅':'⬜'} {t.settleProg1}</li>
+            <li>{ficoSteps.sl_roh?'✅':'⬜'} {t.settleProg2}</li>
+            <li>{ficoSteps.sl_halb?'✅':'⬜'} {t.settleProg3}</li>
+            <li>{ficoSteps.ml?'✅':'⬜'} {t.settleProg4}</li>
+            <li>{ficoSteps.pc?'✅':'⬜'} {t.settleProg5}</li>
+            <li>{ficoSteps.ke27?'✅':'⬜'} {t.settleProg6}</li>
+          </ul>
+        </Card>
+      </div>
+    </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 5: SD SALES
+   ========================================================================= */
+const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, ficoDone, lang='ko', sdReturnSteps, setSdReturnSteps }) => {
+  const t = T[lang];
+  const actualCOGS = ficoDone ? 326.875 : 225;
+  const stdMargin = 750 - 225;
+  const actualMargin = 750 - actualCOGS;
+  return (
+    <div>
+      <GuideSection title={t.sdGuideTitle} items={SD_GUIDE} lang={lang} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="lg:col-span-3 space-y-4">
+        <Card title={`💵 ${t.sdScenTitle}`}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.sdScenDesc}
+          </p>
+          <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="va01" label={t.btnVA01} color="teal" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.va01[lang]} />
+          <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="vl01n" label={t.btnVL01N} color="teal" disabled={!sdSteps.va01} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.vl01n[lang]} />
+          <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="vf01" label={t.btnVF01} color="teal" disabled={!sdSteps.vl01n} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.vf01[lang]} />
+          <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="f28" label={t.btnF28} color="teal" disabled={!sdSteps.vf01} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.f28[lang]} />
+        </Card>
+
+        <Card title={t.plTitle2}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-500 border-b border-slate-200">
+                <th className="text-left py-1.5">{t.plCat}</th>
+                <th className="text-right py-1.5">{t.plStd}</th>
+                <th className="text-right py-1.5">{t.plAct}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-600">{t.plRevenue}</td>
+                <td className="py-1.5 text-right"><Money v={750}/></td>
+                <td className="py-1.5 text-right"><Money v={750}/></td>
+              </tr>
+              <tr className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-600">{t.plCOGS}</td>
+                <td className="py-1.5 text-right"><Money v={225}/></td>
+                <td className="py-1.5 text-right text-red-600"><Money v={actualCOGS}/></td>
+              </tr>
+              <tr className="font-semibold">
+                <td className="py-1.5">{t.plGP}</td>
+                <td className="py-1.5 text-right text-green-600"><Money v={stdMargin}/> (70%)</td>
+                <td className="py-1.5 text-right text-indigo-600">
+                  <Money v={actualMargin}/> ({((actualMargin/750)*100).toFixed(1)}%)
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          {!ficoDone && <p className="text-xs text-amber-600 mt-2">{t.plNote}</p>}
+        </Card>
+
+        <Card title={t.sdRetTitle}>
+          <p className="text-xs text-slate-500 mb-3">
+            {t.sdRetDesc}
+          </p>
+          <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_so" label={t.btnRetSO} color="red" lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.va01_ret[lang]} />
+          <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_del" label={t.btnRetDel} color="red" disabled={!sdReturnSteps.ret_so} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.vl01n_ret[lang]} />
+          <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_credit" label={t.btnCreditMemo} color="red" disabled={!sdReturnSteps.ret_del} lang={lang} openPopup={openPopup}
+            journalData={JOURNAL_DATA.vf01_ret[lang]} />
+        </Card>
+      </div>
+
+      <div className="lg:col-span-2 space-y-4">
+        <Card title={t.finInv}>
+          <InvTable rows={sdInv} lang={lang} />
+        </Card>
+        <Card title={t.salesRev}>
+          <table className="w-full text-xs">
+            <tbody>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.labelRevenue}</td>
+                <td className="py-1 text-right font-medium"><Money v={revenue}/></td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="py-1 text-slate-600">{t.labelAR}</td>
+                <td className="py-1 text-right font-medium"><Money v={arBalance}/></td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 6: LEDGER (ALL JOURNAL ENTRIES)
+   ========================================================================= */
+const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, lang='ko' }) => {
+  const t = T[lang];
+
+  // FICO post-closing step key in App state is `pc`; spec references `ml_pc`.
+  const ficoLedger = { ...ficoSteps, ml_pc: ficoSteps.pc };
+
+  // 분개 항목 생성 (실행된 steps 기반)
+  const entries = [];
+
+  // MM 분개
+  if (mmSteps.me21n)   entries.push({ tab:'MM', tcode:'ME21N', desc:'구매오더 생성', dr:'—', cr:'—', amt:'—', note:'Commitment 기록' });
+  if (mmSteps.migo_gr) entries.push(
+    { tab:'MM', tcode:'MIGO', desc:'원재료 입고(101)', dr:'원재료 ROH001', cr:'GR/IR', amt:500, drAmt:550, crAmt:500 },
+    { tab:'MM', tcode:'MIGO', desc:'구매가격차이', dr:'', cr:'구매가격차이(PPV)', amt:50, drAmt:'', crAmt:50 }
+  );
+  if (mmSteps.miro)    entries.push({ tab:'MM', tcode:'MIRO', desc:'송장검증', dr:'GR/IR', cr:'AP-V001', amt:500, drAmt:500, crAmt:500 });
+  if (mmSteps.f53)     entries.push({ tab:'MM', tcode:'F-53', desc:'대금지급', dr:'AP-V001', cr:'현금', amt:500, drAmt:500, crAmt:500 });
+
+  // PP 분개
+  if (ppSteps.gi_h)    entries.push({ tab:'PP', tcode:'MIGO', desc:'원재료 출고(261) HALB', dr:'WIP', cr:'원재료', amt:394, drAmt:394, crAmt:394 });
+  if (ppSteps.co11n_h) entries.push({ tab:'PP', tcode:'CO11N', desc:'반제품 생산확정', dr:'WIP', cr:'Activity', amt:433.50, drAmt:433.50, crAmt:433.50 });
+  if (ppSteps.gr_h)    entries.push({ tab:'PP', tcode:'MIGO', desc:'반제품 입고(101)', dr:'HALB001', cr:'생산완성대체', amt:360, drAmt:360, crAmt:360 });
+  if (ppSteps.gi_f)    entries.push({ tab:'PP', tcode:'MIGO', desc:'출고(261) FERT', dr:'WIP', cr:'HALB001/ROH001', amt:207.50, drAmt:207.50, crAmt:207.50 });
+  if (ppSteps.co11n_f) entries.push({ tab:'PP', tcode:'CO11N', desc:'완성품 생산확정', dr:'WIP', cr:'Activity', amt:212.50, drAmt:212.50, crAmt:212.50 });
+  if (ppSteps.gr_f)    entries.push({ tab:'PP', tcode:'MIGO', desc:'완성품 입고(101)', dr:'FERT001', cr:'생산완성대체', amt:450, drAmt:450, crAmt:450 });
+  if (ppSteps.ko88_h)  entries.push({ tab:'PP', tcode:'KO88', desc:'HALB001 오더정산', dr:'생산정산차이', cr:'생산완성대체', amt:467.50, drAmt:467.50, crAmt:467.50 });
+  if (ppSteps.ko88_f)  entries.push({ tab:'PP', tcode:'KO88', desc:'FERT001 오더정산', dr:'생산완성대체', cr:'생산정산차이', amt:30, drAmt:30, crAmt:30 });
+
+  // FI/CO 분개
+  if (ficoLedger.ml_pc) entries.push(
+    { tab:'FI/CO', tcode:'CKMLCP', desc:'ML결산전기 재고분', dr:'FERT001', cr:'ML차이계정', amt:101.875, drAmt:101.875, crAmt:101.875 },
+    { tab:'FI/CO', tcode:'CKMLCP', desc:'ML결산전기 소비분', dr:'매출원가', cr:'ML차이계정', amt:101.875, drAmt:101.875, crAmt:101.875 }
+  );
+
+  // SD 분개
+  if (sdSteps.vl01n) entries.push({ tab:'SD', tcode:'VL01N', desc:'출하(GI)', dr:'매출원가(표준)', cr:'완제품', amt:225, drAmt:225, crAmt:225 });
+  if (sdSteps.vf01)  entries.push({ tab:'SD', tcode:'VF01', desc:'청구(Invoice)', dr:'매출채권(AR)', cr:'매출액', amt:750, drAmt:750, crAmt:750 });
+  if (sdSteps.f28)   entries.push({ tab:'SD', tcode:'F-28', desc:'수취(Payment)', dr:'현금', cr:'매출채권(AR)', amt:750, drAmt:750, crAmt:750 });
+
+  const tabColor = { MM:'blue', PP:'orange', 'FI/CO':'indigo', SD:'teal' };
+  const tabBg    = { MM:'bg-blue-100 text-blue-700', PP:'bg-orange-100 text-orange-700', 'FI/CO':'bg-indigo-100 text-indigo-700', SD:'bg-teal-100 text-teal-700' };
+
+  const fmt = (v) => v === '—' || v === '' ? '—' : `$${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}`;
+
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="space-y-4">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold text-slate-800">{t.ledgerTitle}</h2>
+          <p className="text-xs text-slate-500 mt-0.5">{t.ledgerCount} ({entries.length}{lang==='ko'?'건':''})</p>
+        </div>
+        <button onClick={handlePrint}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800">
+          {t.printBtn}
+        </button>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
+          {t.ledgerEmpty}
+        </div>
+      ) : (
+        <>
+          {/* 분개 테이블 */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-700 text-white">
+                  <th className="px-3 py-2 text-left w-14">{t.ledgerColMod}</th>
+                  <th className="px-3 py-2 text-left w-20">T-Code</th>
+                  <th className="px-3 py-2 text-left">{t.ledgerColDesc}</th>
+                  <th className="px-3 py-2 text-left">{t.ledgerColDr}</th>
+                  <th className="px-3 py-2 text-right w-24">{t.colAmt}</th>
+                  <th className="px-3 py-2 text-left">{t.ledgerColCr}</th>
+                  <th className="px-3 py-2 text-right w-24">{t.colAmt}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e, i) => (
+                  <tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}>
+                    <td className="px-3 py-1.5">
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${tabBg[e.tab]||'bg-gray-100 text-gray-600'}`}>{e.tab}</span>
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-slate-600">{e.tcode}</td>
+                    <td className="px-3 py-1.5 text-slate-700">{e.desc}</td>
+                    <td className="px-3 py-1.5 text-red-700 font-medium">{e.dr}</td>
+                    <td className="px-3 py-1.5 text-right text-red-600">{fmt(e.drAmt ?? e.amt)}</td>
+                    <td className="px-3 py-1.5 text-blue-700 font-medium">{e.cr}</td>
+                    <td className="px-3 py-1.5 text-right text-blue-600">{fmt(e.crAmt ?? e.amt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 계정별 잔액 요약 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <h3 className="text-xs font-semibold text-slate-700 mb-2">{t.balTitle}</h3>
+              {[
+                { acct:'원재료 (ROH001)', bal: (mmSteps.migo_gr?550:0) - (ppSteps.gi_h?330:0) - (ppSteps.gi_f?27.50:0) },
+                { acct:'반제품 (HALB001)', bal: (ppSteps.gr_h?360:0) - (ppSteps.gi_f?180:0) + (ppSteps.ko88_h?0:0) },
+                { acct:'완제품 (FERT001)', bal: (ppSteps.gr_f?450:0) - (sdSteps.vl01n?225:0) + (ficoLedger.ml_pc?101.875:0) },
+                { acct:'매출채권 (AR)',    bal: (sdSteps.vf01?750:0) - (sdSteps.f28?750:0) },
+                { acct:'매입채무 (AP)',    bal: (mmSteps.miro?500:0) - (mmSteps.f53?500:0) },
+                { acct:'매출액',          bal: sdSteps.vf01?750:0 },
+                { acct:'매출원가',        bal: (sdSteps.vl01n?225:0) + (ficoLedger.ml_pc?101.875:0) },
+              ].map((r,i) => (
+                <div key={i} className="flex justify-between py-0.5 text-xs border-b border-slate-50 last:border-0">
+                  <span className="text-slate-600">{r.acct}</span>
+                  <span className={`font-semibold ${r.bal<0?'text-red-600':r.bal>0?'text-slate-800':'text-slate-400'}`}>
+                    ${Math.abs(r.bal).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <h3 className="text-xs font-semibold text-slate-700 mb-2">{t.plTitle}</h3>
+              {(() => {
+                const rev  = sdSteps.vf01  ? 750    : 0;
+                const cogs = (sdSteps.vl01n ? 225    : 0) + (ficoLedger.ml_pc ? 101.875 : 0);
+                const gp   = rev - cogs;
+                const margin = rev > 0 ? (gp/rev*100).toFixed(1) : '—';
+                return (
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between"><span className="text-slate-600">{t.plRevenue}</span><span className="font-semibold">${rev.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">{t.plCOGS}</span><span className="font-semibold text-red-600">-${cogs.toFixed(3)}</span></div>
+                    <div className="flex justify-between border-t pt-1.5"><span className="font-bold text-slate-700">{t.plGP}</span><span className={`font-bold ${gp>0?'text-green-600':'text-red-600'}`}>${gp.toFixed(3)} ({margin}%)</span></div>
+                    {ficoLedger.ml_pc && <p className="text-slate-400 italic mt-1">{lang==='ko'?'ML 결산 후 실제원가 반영':'Actual cost reflected after ML settlement'}</p>}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 7: DRYRUN (STATIC E2E REFERENCE TABLE)
+   ========================================================================= */
+const DryrunTab = ({ lang }) => {
+  const modColor = {
+    Master:'bg-gray-100 text-gray-700',
+    MM:'bg-blue-100 text-blue-700',
+    PP:'bg-orange-100 text-orange-700',
+    CO:'bg-indigo-100 text-indigo-700',
+    SD:'bg-teal-100 text-teal-700',
+  };
+
+  const rows = DRYRUN_DATA;
+
+  const fmtAmt = (v) => v != null ? `$${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` : '';
+
+  const JournalCell = ({ items, col }) => {
+    if (!items || items.length === 0) return <td className={`px-2 py-2 text-xs text-slate-300 italic ${col==='dr'?'text-red-300':'text-blue-300'}`}>{T[lang].noJournal}</td>;
+    return (
+      <td className={`px-2 py-2 text-xs ${col==='dr'?'text-red-700':'text-blue-700'}`}>
+        {items.map((item,i) => (
+          <div key={i} className="flex justify-between gap-2 whitespace-nowrap">
+            <span>{item.a[lang]}</span>
+            {item.v != null && <span className="font-semibold ml-2">{fmtAmt(item.v)}</span>}
+          </div>
+        ))}
+      </td>
+    );
+  };
+
+  let prevModule = '';
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-base font-bold text-slate-800">{T[lang].dryrunTitle}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">{T[lang].dryrunSub}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-800 text-white text-left">
+                <th className="px-2 py-2 w-8 text-center">{T[lang].colNo}</th>
+                <th className="px-2 py-2 w-16">{T[lang].colModule}</th>
+                <th className="px-2 py-2 w-20">T-Code</th>
+                <th className="px-2 py-2 w-40">{T[lang].colTx}</th>
+                <th className="px-2 py-2 w-44">{T[lang].colDr}</th>
+                <th className="px-2 py-2 w-44">{T[lang].colCr}</th>
+                <th className="px-2 py-2">{T[lang].colDescMemo}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => {
+                const isNewModule = row.module !== prevModule;
+                prevModule = row.module;
+                const bg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+                const noJournal = !row.dr && !row.cr;
+                return (
+                  <React.Fragment key={row.no}>
+                    {isNewModule && (
+                      <tr className="bg-slate-100">
+                        <td colSpan={7} className="px-3 py-1">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${modColor[row.module]||'bg-gray-100'}`}>
+                            {row.module}
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                    <tr className={`${bg} border-b border-slate-100 hover:bg-yellow-50 transition-colors`}>
+                      <td className="px-2 py-2 text-center text-slate-400 font-mono">{row.no}</td>
+                      <td className="px-2 py-2">
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${modColor[row.module]||'bg-gray-100'}`}>{row.module}</span>
+                      </td>
+                      <td className="px-2 py-2 font-mono text-slate-600 font-medium">{row.tcode}</td>
+                      <td className="px-2 py-2 font-medium text-slate-800">{row.tx[lang]}</td>
+                      {noJournal
+                        ? <td colSpan={2} className="px-2 py-2 text-center text-xs text-slate-300 italic">{T[lang].noJournal}</td>
+                        : <>
+                            <JournalCell items={row.dr} col="dr" />
+                            <JournalCell items={row.cr} col="cr" />
+                          </>
+                      }
+                      <td className="px-2 py-2 text-slate-500 leading-relaxed">{row.desc[lang]}</td>
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 요약 */}
+      <div className="grid grid-cols-3 gap-3 text-xs">
+        {[
+          { label: lang==='ko'?'총 거래 수':'Total Transactions', val: rows.length, color:'text-slate-700' },
+          { label: lang==='ko'?'분개 발생':'With Journal Entry', val: rows.filter(r=>r.dr||r.cr).length, color:'text-blue-700' },
+          { label: lang==='ko'?'분개 없음':'No Journal Entry', val: rows.filter(r=>!r.dr&&!r.cr).length, color:'text-slate-400' },
+        ].map((s,i) => (
+          <div key={i} className="bg-white rounded-lg border border-slate-200 p-3 text-center">
+            <div className={`text-2xl font-bold ${s.color}`}>{s.val}</div>
+            <div className="text-slate-500 mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   TAB 8: CO-PA DETAILED PROFITABILITY ANALYSIS
+   ========================================================================= */
+const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
+  const mlDone = ficoSteps.pc;
+  const ke27Done = ficoSteps.ke27;
+
+  const rev       = sdSteps.vf01  ? 750    : 0;
+  const stdCOGS   = sdSteps.vl01n ? 225    : 0;
+  const stdMargin = rev - stdCOGS;
+  const mlAdj     = (mlDone && sdSteps.vl01n) ? 101.875 : 0;
+  const actCOGS   = stdCOGS + mlAdj;
+  const actMargin = rev - actCOGS;
+  const stdPct    = rev > 0 ? (stdMargin / rev * 100) : 70.0;
+  const actPct    = rev > 0 ? (actMargin / rev * 100) : 56.4;
+
+  // Waterfall items — bar width as % of $750
+  const wf = [
+    { key:'rev',    label: lang==='ko'?'① 매출액':'① Revenue',                  val: rev,       color:'bg-slate-700', type:'total'   },
+    { key:'scogs',  label: lang==='ko'?'② 표준원가 (COGS)':'② Standard COGS',   val: -stdCOGS,  color:'bg-red-400',   type:'deduct'  },
+    { key:'smgn',   label: lang==='ko'?'③ 표준마진':'③ Standard Margin',         val: stdMargin, color:'bg-green-500', type:'subtotal'},
+    { key:'mladj',  label: lang==='ko'?'④ ML 원가조정':'④ ML Cost Adj',          val: -mlAdj,    color:'bg-orange-400',type:'deduct'  },
+    { key:'amgn',   label: lang==='ko'?'⑤ 실제마진 (CO-PA)':'⑤ Actual Margin',   val: actMargin, color:'bg-indigo-600',type:'subtotal'},
+  ];
+
+  const refVals = { rev:750, scogs:225, smgn:525, mladj:101.875, amgn:423.125 };
+
+  const barW = (item) => {
+    const absVal = Math.abs(item.val);
+    if (rev === 0) {
+      const ref = { rev:100, scogs:30, smgn:70, mladj:13.6, amgn:56.4 };
+      return ref[item.key] || 0;
+    }
+    return (absVal / 750 * 100);
+  };
+
+  const fmt = (v, prefix='$') => `${prefix}${Math.abs(v).toFixed(2)}`;
+
+  const reportRows = [
+    { item: lang==='ko'?'매출액 (Net Revenue)':'Net Revenue',                   std:750,   act:rev,       bold:false },
+    { item: lang==='ko'?'표준매출원가 (Std COGS)':'Standard COGS',              std:-225,  act:-stdCOGS,  bold:false },
+    { item: lang==='ko'?'표준마진 (Gross Margin)':'Standard Gross Margin',       std:525,   act:stdMargin, bold:true  },
+    { item: lang==='ko'?'ML 원가조정 (Price/Eff Var)':'ML Cost Adjustment',      std:0,     act:-mlAdj,    bold:false },
+    { item: lang==='ko'?'실제마진 (Contribution Margin)':'Actual Contribution Margin', std:525, act:actMargin, bold:true },
+    { item: lang==='ko'?'마진율 (CM %)':'Contribution Margin %',                std:70,    act:actPct,    bold:false, isPct:true },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-base font-bold text-slate-800">
+          {lang==='ko' ? '📈 CO-PA 수익성 상세 분석' : '📈 CO-PA Detailed Profitability Analysis'}
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          {lang==='ko'
+            ? 'CO 모듈의 최종 목적 — 제품별/고객별 실제 마진 분석 (KE27 실제전기 / KE30 보고서)'
+            : 'CO Module final goal — Product/Customer actual margin (KE27 Actual Posting / KE30 Report)'}
+        </p>
+      </div>
+
+      {!ke27Done && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+          ⚠️ {lang==='ko'
+            ? 'FI/CO 탭 → KE27 실행 전입니다. 아래는 참조 시나리오 수치(회색 표시)입니다.'
+            : 'KE27 not yet executed in FI/CO tab. Values below are reference scenario figures.'}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Waterfall Chart */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-4">
+            Contribution Margin Waterfall
+          </h3>
+          <div className="space-y-2.5">
+            {wf.map(item => (
+              <div key={item.key} className="flex items-center gap-3">
+                <div className="w-44 text-xs text-slate-600 text-right shrink-0">{item.label}</div>
+                <div className="flex-1 h-7 bg-slate-100 rounded overflow-hidden">
+                  <div
+                    className={`h-full ${item.color} transition-all duration-500 rounded`}
+                    style={{width: `${Math.max(barW(item), 1)}%`}}
+                  />
+                </div>
+                <div className={`w-28 text-xs font-semibold text-right shrink-0
+                  ${item.type==='deduct'?'text-red-600':item.type==='subtotal'?'text-indigo-600':'text-slate-700'}`}>
+                  {item.type==='deduct'
+                    ? (item.val===0 ? '$0.00' : `-${fmt(item.val)}`)
+                    : fmt(item.val)}
+                  {item.type==='subtotal' && (
+                    <span className="text-slate-400 font-normal ml-1">
+                      ({rev>0?(item.val/rev*100).toFixed(1):item.key==='smgn'?'70.0':'56.4'}%)
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center">
+            <div>
+              <div className="text-xs text-slate-500">{lang==='ko'?'표준마진율':'Std Margin %'}</div>
+              <div className="text-xl font-bold text-green-600">{stdPct.toFixed(1)}%</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500">{lang==='ko'?'ML 원가영향':'ML Impact'}</div>
+              <div className="text-xl font-bold text-orange-500">-${mlAdj.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500">{lang==='ko'?'실제마진율':'Act Margin %'}</div>
+              <div className="text-xl font-bold text-indigo-600">{actPct.toFixed(1)}%</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Side Cards */}
+        <div className="space-y-3">
+          {/* Product Margin per EA */}
+          <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4">
+            <h3 className="text-xs font-semibold text-indigo-700 mb-3">
+              {lang==='ko' ? '📦 제품별 마진 (per EA)' : '📦 Product Margin (per EA)'}
+            </h3>
+            <div className="bg-white rounded-lg p-3 border border-indigo-100 text-xs space-y-1.5">
+              <div className="font-semibold text-slate-700">FERT001 — Brake Caliper</div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{lang==='ko'?'판매단가':'Unit Price'}</span>
+                <span className="font-medium">$150.00</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{lang==='ko'?'표준원가':'Std Cost'}</span>
+                <span className="font-medium text-red-500">$45.00</span>
+              </div>
+              <div className="flex justify-between border-t pt-1 border-indigo-100">
+                <span className="font-semibold text-green-700">{lang==='ko'?'표준마진':'Std Margin'}</span>
+                <span className="font-bold text-green-600">$105.00 (70%)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{lang==='ko'?'실제원가':'Act Cost'}</span>
+                <span className="font-medium text-red-500">${(actCOGS>0?(actCOGS/5):65.375).toFixed(3)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-1 border-indigo-100">
+                <span className="font-semibold text-indigo-700">{lang==='ko'?'실제마진':'Act Margin'}</span>
+                <span className="font-bold text-indigo-600">${(actMargin>0?actMargin/5:84.625).toFixed(3)} ({actPct.toFixed(1)}%)</span>
+              </div>
+              <div className="mt-2">
+                <div className="text-slate-400 mb-0.5">{lang==='ko'?'마진율 비교':'Margin comparison'}</div>
+                <div className="h-2 bg-slate-100 rounded overflow-hidden">
+                  <div className="h-2 bg-green-400 rounded" style={{width:'70%'}}/>
+                </div>
+                <div className="h-2 bg-slate-100 rounded overflow-hidden mt-0.5">
+                  <div className="h-2 bg-indigo-500 rounded" style={{width:`${actPct}%`}}/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Profitability */}
+          <div className="bg-teal-50 rounded-xl border border-teal-200 p-4">
+            <h3 className="text-xs font-semibold text-teal-700 mb-3">
+              {lang==='ko' ? '👤 고객별 수익성' : '👤 Customer Profitability'}
+            </h3>
+            <div className="bg-white rounded-lg p-3 border border-teal-100 text-xs space-y-1.5">
+              <div className="font-semibold text-slate-700">C001 — Ford Motor Co.</div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{lang==='ko'?'매출':'Revenue'}</span>
+                <span className="font-medium">${rev.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{lang==='ko'?'실제COGS':'Actual COGS'}</span>
+                <span className="font-medium text-red-500">-${actCOGS.toFixed(3)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-1 border-teal-100">
+                <span className="font-bold text-teal-800">{lang==='ko'?'실제마진':'Actual Margin'}</span>
+                <span className={`font-bold ${actMargin>=0?'text-teal-700':'text-red-600'}`}>
+                  ${actMargin.toFixed(3)} ({actPct.toFixed(1)}%)
+                </span>
+              </div>
+              <div className="pt-1 text-slate-400">
+                {lang==='ko'?'납품수량: 5 EA':'Qty delivered: 5 EA'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* KE30 Profitability Report */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">
+          {lang==='ko'
+            ? '🇺🇸 미국 자동차 부품업 수익성 리포트 (KE30 양식)'
+            : '🇺🇸 US Auto Parts Industry Profitability Report (KE30 Format)'}
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-700 text-white text-left">
+                <th className="px-3 py-2">{lang==='ko'?'항목':'Item'}</th>
+                <th className="px-3 py-2 text-right">{lang==='ko'?'표준':'Standard'}</th>
+                <th className="px-3 py-2 text-right">{lang==='ko'?'실제':'Actual'}</th>
+                <th className="px-3 py-2 text-right">{lang==='ko'?'차이 (Var)':'Variance'}</th>
+                <th className="px-3 py-2 text-right">% of Rev</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportRows.map((row, i) => {
+                const variance = row.isPct ? (row.act - row.std) : (row.act - row.std);
+                const pctOfRev = (!row.isPct && rev > 0) ? (row.act / rev * 100) : null;
+                return (
+                  <tr key={i} className={`${i%2===0?'bg-white':'bg-slate-50'} ${row.bold?'border-t-2 border-slate-300':''}`}>
+                    <td className={`px-3 py-2 ${row.bold?'font-semibold text-slate-800':'text-slate-700'}`}>{row.item}</td>
+                    <td className="px-3 py-2 text-right text-slate-500">
+                      {row.isPct ? `${row.std.toFixed(1)}%` : `$${Math.abs(row.std).toFixed(2)}`}
+                    </td>
+                    <td className={`px-3 py-2 text-right ${row.bold?'font-bold':'font-medium'}`}>
+                      {row.isPct
+                        ? <span className={row.act < row.std ? 'text-orange-600':'text-green-600'}>{row.act.toFixed(1)}%</span>
+                        : <span className={row.bold?(actMargin>=0?'text-indigo-700':'text-red-600'):''}>${Math.abs(row.act).toFixed(2)}</span>}
+                    </td>
+                    <td className={`px-3 py-2 text-right ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                      {row.isPct
+                        ? `${variance >= 0 ? '+' : ''}${variance.toFixed(1)}%`
+                        : variance === 0 ? '—' : `${variance > 0 ? '+' : ''}$${variance.toFixed(2)}`}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-400">
+                      {pctOfRev !== null ? `${pctOfRev.toFixed(1)}%` : ''}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 space-y-1">
+          <p>▪ {lang==='ko'
+            ? 'ML 원가조정 = Material Ledger 실제원가 - 표준원가 (구매가격차이 PPV + 생산효율차이)'
+            : 'ML Cost Adj = Material Ledger actual cost – standard cost (PPV + Production efficiency variance)'}</p>
+          <p>▪ {lang==='ko'
+            ? '미국 자동차 부품 OEM 납품 업계 평균 CM%: 55~65% (참고: 본 시뮬레이터 실제마진 56.4%는 업계 평균 하단)'
+            : 'US Auto Parts OEM supply avg CM%: 55–65% (Note: this simulator actual margin 56.4% is at industry lower end)'}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   APP (GLOBAL STATE + DATA LINKAGE)
+   ========================================================================= */
+function App() {
+  const [activeTab, setActiveTab] = useState('master');
+  const [lang, setLang] = useState('ko'); // 'ko' | 'en'
+  const [materials, setMaterials] = useState(DEFAULT_MATERIALS);
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupData, setPopupData] = useState(null);
+
+  const openPopup = (data) => { setPopupData(data); setShowPopup(true); };
+
+  const [mmSteps, setMmSteps] = useState({ me21n:false, migo_gr:false, miro:false, f53:false });
+  const [ppSteps, setPpSteps] = useState({
+    co01_h:false, gi_h:false, co11n_h:false, gr_h:false,
+    co01_f:false, gi_f:false, co11n_f:false, gr_f:false,
+    ko88_h:false, ko88_f:false
+  });
+  const [ficoSteps, setFicoSteps] = useState({ kss2:false, sl_roh:false, sl_halb:false, ml:false, pc:false, ke27:false });
+  const [sdSteps, setSdSteps] = useState({ va01:false, vl01n:false, vf01:false, f28:false });
+  const [ckSteps, setCkSteps] = useState({ kp26:false, ck11n_h:false, ck24_h:false, ck11n_f:false, ck24_f:false });
+
+  /* ---- C-3 extended scenario steps ---- */
+  const [mmReturnSteps, setMmReturnSteps] = useState({ ret_po:false, ret_migo:false });
+  const [miSteps, setMiSteps] = useState({ mi01:false, mi04:false, mi07:false });
+  const [sdebSteps, setSdebSteps] = useState({ miro_sd:false, miro_sd2:false, f53_sd:false });
+  const [mr21Steps, setMr21Steps] = useState({ mr21:false });
+  const [sdReturnSteps, setSdReturnSteps] = useState({ ret_so:false, ret_del:false, ret_credit:false });
+
+  /* ---- MM derived data ---- */
+  const mmInv = useMemo(() => {
+    const roh001Qty = mmSteps.migo_gr ? 100 : 0;
+    const roh001Amt = mmSteps.migo_gr ? 550 : 0;
+    return [{ code:'ROH001', uom:'KG', qty:roh001Qty, amt:roh001Amt }];
+  }, [mmSteps]);
+  const priceVar = mmSteps.migo_gr ? 50 : 0;
+  const apBalance = useMemo(() => {
+    let bal = 0;
+    if (mmSteps.miro) bal += 500;
+    if (mmSteps.f53) bal -= 500;
+    return bal;
+  }, [mmSteps]);
+
+  /* ---- PP derived data (linked to MM stock) ---- */
+  const roh001FromMM = mmSteps.migo_gr ? 100 : 0;
+  const ppInv = useMemo(() => {
+    // ROH001: from MM 100KG; consumed 60KG (HALB GI) + 5KG (FERT GI)
+    let roh001 = roh001FromMM;
+    if (ppSteps.gi_h) roh001 -= 60;
+    if (ppSteps.gi_f) roh001 -= 5;
+    const roh001Amt = roh001 * 5.50;
+    // ROH002: assume 20KG available; consumed 20KG at HALB GI
+    let roh002 = 20;
+    if (ppSteps.gi_h) roh002 -= 20;
+    const roh002Amt = roh002 * 3.20;
+    // HALB001: produced 20EA (GR_H), consumed 10EA (GI_F)
+    let halb = 0;
+    if (ppSteps.gr_h) halb += 20;
+    if (ppSteps.gi_f) halb -= 10;
+    const halbAmt = halb * 18.00;
+    // FERT001: produced 10EA (GR_F)
+    let fert = 0;
+    if (ppSteps.gr_f) fert += 10;
+    const fertAmt = fert * 45.00;
+    return [
+      { code:'ROH001', uom:'KG', qty:roh001, amt:roh001Amt },
+      { code:'ROH002', uom:'KG', qty:roh002, amt:roh002Amt },
+      { code:'HALB001', uom:'EA', qty:halb, amt:halbAmt },
+      { code:'FERT001', uom:'EA', qty:fert, amt:fertAmt },
+    ];
+  }, [ppSteps, roh001FromMM]);
+
+  const wip = useMemo(() => {
+    let halb = 0;
+    if (ppSteps.gi_h) halb += 394;      // material 330+64
+    if (ppSteps.co11n_h) halb += 700;   // activities 400+300 (actual)
+    if (ppSteps.gr_h) halb -= 360;      // factory output credit (std)
+    if (ppSteps.ko88_h) halb -= 500;    // settlement variance moved out
+    let fert = 0;
+    if (ppSteps.gi_f) fert += 207.50;
+    if (ppSteps.co11n_f) fert += 225;
+    if (ppSteps.gr_f) fert -= 450;
+    if (ppSteps.ko88_f) fert += 30;
+    return { halb, fert };
+  }, [ppSteps]);
+
+  const ppVar = useMemo(() => ({
+    halb: ppSteps.ko88_h ? 500 : 0,
+    fert: ppSteps.ko88_f ? -30 : 0,
+  }), [ppSteps]);
+
+  /* ---- FI/CO derived ---- */
+  const ficoDone = ficoSteps.pc;
+  const copa = { actualCOGS: ficoDone ? 326.875 : 225 };
+
+  /* ---- SD derived data (linked to PP finished goods) ---- */
+  const fertFromPP = ppSteps.gr_f ? 10 : 0;
+  const sdInv = useMemo(() => {
+    let fert = fertFromPP;
+    if (sdSteps.vl01n) fert -= 5;
+    return [{ code:'FERT001', uom:'EA', qty:fert, amt:fert*45.00 }];
+  }, [sdSteps, fertFromPP]);
+  const arBalance = useMemo(() => {
+    let bal = 0;
+    if (sdSteps.vf01) bal += 750;
+    if (sdSteps.f28) bal -= 750;
+    return bal;
+  }, [sdSteps]);
+  const revenue = sdSteps.vf01 ? 750 : 0;
+
+  const tabLabels = T[lang].tabs;
+  const tabs = [
+    { id:'master', label:tabLabels[0], icon:'📋' },
+    { id:'mm', label:tabLabels[1], icon:'🛒' },
+    { id:'pp', label:tabLabels[2], icon:'🏭' },
+    { id:'fico', label:tabLabels[3], icon:'🧮' },
+    { id:'sd', label:tabLabels[4], icon:'💵' },
+    { id:'ledger', label:tabLabels[5], icon:'' },
+    { id:'dryrun', label:'Dryrun', icon:'📊' },
+    { id:'copa', label:'CO-PA', icon:'📈' },
+  ];
+
+  return (
+    <div className="min-h-screen">
+      {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
+
+      <header className="bg-gradient-to-r from-slate-800 to-slate-700 text-white shadow-md">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏭</span>
+            <div>
+              <h1 className="font-bold text-lg">SAP ECC Simulator — {COMPANY.name}</h1>
+              <p className="text-xs text-slate-300">
+                Company Code {COMPANY.code} · Plant {COMPANY.plant} ({COMPANY.plantName})
+              </p>
+            </div>
+            <button
+              onClick={() => setLang(l => l === 'ko' ? 'en' : 'ko')}
+              className="ml-auto flex items-center gap-1 px-3 py-1 rounded-full border border-slate-500 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
+            </button>
+          </div>
+          <nav className="flex gap-1 mt-3 flex-wrap">
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-all
+                  ${activeTab===t.id ? 'bg-slate-100 text-slate-800' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-5">
+        {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} lang={lang} />}
+        {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} />}
+        {activeTab==='pp' && <PPTab ppSteps={ppSteps} setPpSteps={setPpSteps} openPopup={openPopup} ppInv={ppInv} wip={wip} ppVar={ppVar} lang={lang} />}
+        {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} />}
+        {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} />}
+        {activeTab==='ledger' && <LedgerTab mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} ckSteps={ckSteps} materials={materials} lang={lang} />}
+        {activeTab==='dryrun' && <DryrunTab lang={lang} />}
+        {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
+      </main>
+
+      <footer className="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-slate-400">
+        SAP ECC FI/CO Simulator · Vendor {VENDOR.code} ({VENDOR.name}) · Customer {CUSTOMER.code} ({CUSTOMER.name})
+        <br/>{T[lang].footerFlow}
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

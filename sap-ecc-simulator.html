@@ -19,7 +19,7 @@
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useMemo, useRef } = React;
+const { useState, useMemo, useRef, useEffect } = React;
 
 const APP_PIN = '__SAP_PIN__';
 
@@ -2479,6 +2479,11 @@ function App() {
     if (e.key === 'Backspace' && !pinDigits[i] && i > 0) focusPin(i - 1);
   };
 
+  // Auto-focus first PIN input on page load
+  useEffect(() => {
+    if (!unlocked) focusPin(0);
+  }, []);
+
   const [mmSteps, setMmSteps] = useState({ me21n:false, migo_gr:false, miro:false, f53:false });
   const [ppSteps, setPpSteps] = useState({
     co01_h:false, gi_h:false, co11n_h:false, gr_h:false,
@@ -2631,6 +2636,7 @@ function App() {
                 <span className="text-xs text-slate-300">🔐 PIN:</span>
                 {pinDigits.map((d, i) => (
                   <input key={i} type="password" inputMode="numeric" maxLength={1} value={d}
+                    autoFocus={i === 0}
                     onChange={e => handlePinInput(i, e.target.value)}
                     onKeyDown={e => handlePinKeyDown(i, e)}
                     className={`w-8 h-8 text-center text-sm font-bold rounded border-2 bg-slate-700 text-white outline-none transition-colors

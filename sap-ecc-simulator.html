@@ -1977,6 +1977,12 @@ const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, l
 
   return (
     <div className="space-y-4">
+      {/* 안내 문구 */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 text-sm text-indigo-700 font-medium">
+        ℹ️ {lang==='ko'
+          ? '거래를 선택하면 순서대로 분개가 실행됩니다.'
+          : 'Select transactions in order and journal entries will be executed sequentially.'}
+      </div>
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
@@ -2554,8 +2560,8 @@ function App() {
   const TAB_GROUPS = [
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
-    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['ledger','fico','copa'] },
-    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun'] },
+    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa'] },
+    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun','ledger'] },
   ];
   const activeGroup = TAB_GROUPS.find(g => g.tabIds.includes(activeTab)) || TAB_GROUPS[0];
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
@@ -2586,7 +2592,8 @@ function App() {
             {TAB_GROUPS.map(g => (
               <button key={g.id}
                 onClick={() => setActiveTab(g.tabIds[0])}
-                className={`px-5 py-1.5 text-xs font-bold rounded-t transition-all tracking-wide
+                className={`px-5 py-1.5 font-bold rounded-t transition-all tracking-wide
+                  ${g.id==='grp_ledger' ? 'text-[0.825rem]' : 'text-xs'}
                   ${activeGroup.id===g.id
                     ? 'bg-indigo-500 text-white shadow-sm'
                     : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'}`}>

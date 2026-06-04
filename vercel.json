@@ -2,6 +2,6 @@
   "buildCommand": "node build.js",
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/", "destination": "/sap-ecc-simulator.html" }
+    { "source": "/", "destination": "/erp-simulator.html" }
   ]
 }

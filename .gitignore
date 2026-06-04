@@ -1,0 +1,5 @@
+.vercel
+public/
+node_modules/
+*.stackdump
+.DS_Store

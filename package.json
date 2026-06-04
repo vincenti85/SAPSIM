@@ -1,5 +1,5 @@
 {
-  "name": "sap-ecc-simulator",
+  "name": "erp-process-simulator",
   "version": "1.0.0",
   "scripts": {
     "build": "node build.js"

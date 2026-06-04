@@ -14,11 +14,11 @@ if (!/^\d{4}$/.test(pin)) {
   process.exit(1);
 }
 
-const src = path.join(__dirname, 'sap-ecc-simulator.html');
+const src = path.join(__dirname, 'erp-simulator.html');
 let html = fs.readFileSync(src, 'utf8');
-html = html.replace("'__SAP_PIN__'", `'${pin}'`);
+html = html.replace("'__APP_PIN__'", `'${pin}'`);
 
 const outDir = path.join(__dirname, 'public');
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, 'sap-ecc-simulator.html'), html);
+fs.writeFileSync(path.join(outDir, 'erp-simulator.html'), html);
 console.log(`Build complete. PIN injected (${pin.replace(/./g, '*')}).`);

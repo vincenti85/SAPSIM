@@ -1372,101 +1372,119 @@ const MappingButton = ({ lang }) => {
 };
 
 /* =========================================================================
-   TEAM LEAD BUSINESS GUIDE (internal training; business flow before SAP)
+   TEAM LEAD BUSINESS GUIDE (bilingual; business flow before SAP)
    ========================================================================= */
 const GUIDE_SECTIONS = [
-  { id:'overview', icon:'🗺️', title:'전체 흐름 (E2E)', blocks:[
-    { p:'SAP는 비즈니스를 만드는 도구가 아니라, 이미 일어난(또는 일어날) 사건을 기록·통제·연결하는 도구입니다. 비즈니스 흐름을 모르면 화면의 버튼은 의미가 없습니다.' },
-    { flow:['구매 (MM)','생산 (PP)','판매 (SD)'] },
-    { h:'두 개의 큰 사이클' },
-    { ul:['P2P (구매~지급): 자재필요 → 발주 → 입고 → 송장 → 지급. MM 주도, FI 정산.','O2C (수주~수금): 수주 → 출하 → 청구 → 수금. SD 주도, FI 정산.','그 사이에서 PP가 물건을 만들고, CO가 진짜 원가를 계산합니다.'] },
-    { h:'우리 회사 (ABC Auto Parts)' },
-    { p:'알루미늄 시트·강철 봉을 사서(MM) 브래킷 프레임(반제품)을 거쳐 엔진 마운트 브래킷(완제품)을 만들고(PP) 자동차 회사 고객에게 판매(SD)합니다. 모든 돈의 흐름은 회계(FI)에 기록되고, 월말에 표준 대비 실제 원가를 정산·분석(CO)합니다.' },
+  { id:'overview', icon:'🗺️', title:{ ko:'전체 흐름 (E2E)', en:'End-to-End Flow' }, blocks:[
+    { p:{ ko:'SAP는 비즈니스를 만드는 도구가 아니라, 이미 일어난(또는 일어날) 사건을 기록·통제·연결하는 도구입니다. 비즈니스 흐름을 모르면 화면의 버튼은 의미가 없습니다.', en:'SAP does not create the business; it records, controls, and connects events that have already happened (or will). Without understanding the business flow, the buttons are meaningless.' } },
+    { flow:{ ko:['구매 (MM)','생산 (PP)','판매 (SD)'], en:['Procurement (MM)','Production (PP)','Sales (SD)'] } },
+    { h:{ ko:'두 개의 큰 사이클', en:'Two major cycles' } },
+    { ul:{ ko:['P2P (구매~지급): 자재필요 → 발주 → 입고 → 송장 → 지급. MM 주도, FI 정산.','O2C (수주~수금): 수주 → 출하 → 청구 → 수금. SD 주도, FI 정산.','그 사이에서 PP가 물건을 만들고, CO가 진짜 원가를 계산합니다.'], en:['P2P (Procure-to-Pay): need → PO → receipt → invoice → payment. Led by MM, settled by FI.','O2C (Order-to-Cash): order → delivery → billing → collection. Led by SD, settled by FI.','In between, PP makes the goods and CO calculates the true cost.'] } },
+    { h:{ ko:'우리 회사 (ABC Auto Parts)', en:'Our company (ABC Auto Parts)' } },
+    { p:{ ko:'알루미늄 시트·강철 봉을 사서(MM) 브래킷 프레임(반제품)을 거쳐 엔진 마운트 브래킷(완제품)을 만들고(PP) 자동차 회사 고객에게 판매(SD)합니다. 모든 돈의 흐름은 회계(FI)에 기록되고, 월말에 표준 대비 실제 원가를 정산·분석(CO)합니다.', en:'We buy aluminum sheet and steel rod (MM), build the bracket frame (semi-finished) and then the engine mount bracket (finished) (PP), and sell to an automaker customer (SD). Every cash movement is recorded in accounting (FI), and at month-end we settle and analyze standard vs actual cost (CO).' } },
   ]},
-  { id:'master', icon:'🧱', title:'마스터 & BOM', blocks:[
-    { p:'마스터 데이터는 IT 설정이 아니라 부서 간 비즈니스 약속입니다. 여기가 틀리면 모든 모듈이 틀립니다.' },
-    { h:'제품 구조 (멀티레벨 BOM)' },
-    { flow:['RM 원자재','SF 반제품','FG 완제품'] },
-    { p:'FG001 ← SF001×1 + RM001×0.5 / SF001 ← RM001×3 + RM002×1' },
-    { h:'자재유형 = 다루는 방식의 정의' },
-    { tbl:{ head:['유형','의미','비즈니스 행동','주관'], rows:[
-      ['RM 원자재','외부에서 산다','구매·재고평가','MM'],
-      ['SF 반제품','사내 제작(중간)','생산이자 다음 공정의 자재','PP'],
-      ['FG 완제품','만들어 판다','생산·판매','PP→SD'],
-    ]}},
-    { h:'팀장 통제점' },
-    { ul:['표준원가·BOM 소요량·공정 시간은 기간 내 함부로 못 바꾸는 약속','변경 시 누가·언제·무슨 근거로(승인 절차)가 핵심'] },
+  { id:'master', icon:'🧱', title:{ ko:'마스터 & BOM', en:'Master & BOM' }, blocks:[
+    { p:{ ko:'마스터 데이터는 IT 설정이 아니라 부서 간 비즈니스 약속입니다. 여기가 틀리면 모든 모듈이 틀립니다.', en:'Master data is not an IT setting but a cross-department business agreement. If it is wrong, every module is wrong.' } },
+    { h:{ ko:'제품 구조 (멀티레벨 BOM)', en:'Product structure (multi-level BOM)' } },
+    { flow:{ ko:['RM 원자재','SF 반제품','FG 완제품'], en:['RM material','SF semi-finished','FG finished'] } },
+    { p:{ ko:'FG001 ← SF001×1 + RM001×0.5 / SF001 ← RM001×3 + RM002×1', en:'FG001 ← SF001×1 + RM001×0.5 / SF001 ← RM001×3 + RM002×1' } },
+    { h:{ ko:'자재유형 = 다루는 방식의 정의', en:'Material type = how it is handled' } },
+    { tbl:{
+      ko:{ head:['유형','의미','비즈니스 행동','주관'], rows:[
+        ['RM 원자재','외부에서 산다','구매·재고평가','MM'],
+        ['SF 반제품','사내 제작(중간)','생산이자 다음 공정의 자재','PP'],
+        ['FG 완제품','만들어 판다','생산·판매','PP→SD'],
+      ]},
+      en:{ head:['Type','Meaning','Business action','Owner'], rows:[
+        ['RM material','Bought externally','Purchase & inventory valuation','MM'],
+        ['SF semi-finished','Made in-house (mid)','Produced; also input to next step','PP'],
+        ['FG finished','Made to sell','Production & sales','PP→SD'],
+      ]},
+    }},
+    { h:{ ko:'팀장 통제점', en:'Team lead controls' } },
+    { ul:{ ko:['표준원가·BOM 소요량·공정 시간은 기간 내 함부로 못 바꾸는 약속','변경 시 누가·언제·무슨 근거로(승인 절차)가 핵심'], en:['Standard cost, BOM quantities, and routing times are agreements that cannot be changed freely within a period','What matters is who/when/on what basis they change (approval)'] } },
   ]},
-  { id:'mm', icon:'🛒', title:'MM — 구매', blocks:[
-    { h:'미션' }, { p:'생산이 멈추지 않도록 적정 품질의 자재를 적정 가격·시점에 확보하고, 대금 의무를 정확히 관리한다.' },
-    { h:'비즈니스 현실 (SAP 이전)' }, { p:'자재 부족 → 공급사·단가 결정 → 주문서 발송 → 입고·검수 → 청구서 수령 → 주문/입고와 대조 → 대금 지급. 핵심 긴장: 발주가와 회계 표준가가 다를 수 있고, 그 차이가 원가 분석의 단서가 된다.' },
-    { h:'우리 회사 케이스' }, { p:'V001 Summit Aluminum에 RM001 100KG 발주(발주가 $5.00/KG, 표준가 $5.50/KG). 입고 재고는 표준가 $550, 발주가 $500과의 차이 $50(유리)는 구매가격차이로 분리. 송장 일치 시 $500 지급.' },
-    { h:'팀장 통제점' }, { ul:['공급사 선정·단가 협상(품질/납기/가격)','3-way Matching(발주=입고=송장): 안 맞는 청구서는 지급 보류','구매가격차이 모니터링(협상/표준가 신호)','과다재고 vs 결품 균형'] },
-    { h:'핸드오프' }, { ul:['← PP/마스터: 무엇을 얼마나 살지(BOM·생산계획)','→ FI: 매입채무·현금 기록','→ CO: 구매가격차이'] },
+  { id:'mm', icon:'🛒', title:{ ko:'MM — 구매', en:'MM — Procurement' }, blocks:[
+    { h:{ ko:'미션', en:'Mission' } }, { p:{ ko:'생산이 멈추지 않도록 적정 품질의 자재를 적정 가격·시점에 확보하고, 대금 의무를 정확히 관리한다.', en:'Secure the right-quality materials at the right price and time so production never stops, and manage payment obligations accurately.' } },
+    { h:{ ko:'비즈니스 현실 (SAP 이전)', en:'Business reality (before SAP)' } }, { p:{ ko:'자재 부족 → 공급사·단가 결정 → 주문서 발송 → 입고·검수 → 청구서 수령 → 주문/입고와 대조 → 대금 지급. 핵심 긴장: 발주가와 회계 표준가가 다를 수 있고, 그 차이가 원가 분석의 단서가 된다.', en:'Material runs low → choose supplier and price → send PO → receive and inspect → receive invoice → match against PO/receipt → pay. Key tension: the PO price and the accounting standard price may differ, and that difference becomes a clue for cost analysis.' } },
+    { h:{ ko:'우리 회사 케이스', en:'Our case' } }, { p:{ ko:'V001 Summit Aluminum에 RM001 100KG 발주(발주가 $5.00/KG, 표준가 $5.50/KG). 입고 재고는 표준가 $550, 발주가 $500과의 차이 $50(유리)는 구매가격차이로 분리. 송장 일치 시 $500 지급.', en:'Order RM001 100KG from V001 Summit Aluminum (PO $5.00/KG, standard $5.50/KG). Inventory is booked at standard $550; the $50 favorable difference vs PO $500 is split out as purchase price variance. If the invoice matches, pay $500.' } },
+    { h:{ ko:'팀장 통제점', en:'Team lead controls' } }, { ul:{ ko:['공급사 선정·단가 협상(품질/납기/가격)','3-way Matching(발주=입고=송장): 안 맞는 청구서는 지급 보류','구매가격차이 모니터링(협상/표준가 신호)','과다재고 vs 결품 균형'], en:['Supplier selection & price negotiation (quality/lead time/price)','3-way matching (PO = receipt = invoice): hold payment if mismatched','Monitor purchase price variance (negotiation / standard-price signal)','Balance overstock vs stockout'] } },
+    { h:{ ko:'핸드오프', en:'Handoffs' } }, { ul:{ ko:['← PP/마스터: 무엇을 얼마나 살지(BOM·생산계획)','→ FI: 매입채무·현금 기록','→ CO: 구매가격차이'], en:['← PP/Master: what and how much to buy (BOM, production plan)','→ FI: payables and cash entries','→ CO: purchase price variance'] } },
   ]},
-  { id:'pp', icon:'⚙️', title:'PP — 생산', blocks:[
-    { h:'미션' }, { p:'BOM·공정대로 자재와 시간(노무·기계)을 투입해 물건을 만들고, 계획 대비 실제 투입의 차이를 드러낸다.' },
-    { h:'비즈니스 현실 (SAP 이전)' }, { p:'작업지시 → 원자재 출고 → 가공(시간 투입) → 완성품 입고. 이 과정에서 표준 원가와 실제 원가가 어긋나며, 그 차이(생산차이)가 PP가 드러내야 할 핵심 정보다.' },
-    { h:'우리 회사 케이스 (2단계 멀티레벨)' }, { ul:['Phase 1: 반제품 SF001 20EA — RM001 60KG+RM002 20KG 출고 + 노무20h·기계10h. 표준 $18/EA보다 실제 투입이 커 차이 발생.','Phase 2: 완제품 FG001 10EA — SF001 10EA+RM001 5KG + 노무5h·기계2.5h.','반드시 하위(반제품)부터 만들고 정산해야 상위 원가가 맞는다.'] },
-    { h:'팀장 통제점' }, { ul:['하위→상위 생산·정산 순서 준수','실적(수량·시간) 정확성 = 원가 정확성','생산차이 분석: 수율(자재) vs 설비/숙련(시간)','WIP(재공품) 관리'] },
-    { h:'핸드오프' }, { ul:['← MM: 원자재 입고','← CO: 노무·기계 단가','→ CO: 생산차이 정산','→ SD: 완제품 재고'] },
+  { id:'pp', icon:'⚙️', title:{ ko:'PP — 생산', en:'PP — Production' }, blocks:[
+    { h:{ ko:'미션', en:'Mission' } }, { p:{ ko:'BOM·공정대로 자재와 시간(노무·기계)을 투입해 물건을 만들고, 계획 대비 실제 투입의 차이를 드러낸다.', en:'Put materials and time (labor/machine) into the BOM and routing to make goods, and surface the variance of actual vs planned input.' } },
+    { h:{ ko:'비즈니스 현실 (SAP 이전)', en:'Business reality (before SAP)' } }, { p:{ ko:'작업지시 → 원자재 출고 → 가공(시간 투입) → 완성품 입고. 이 과정에서 표준 원가와 실제 원가가 어긋나며, 그 차이(생산차이)가 PP가 드러내야 할 핵심 정보다.', en:'Work order → issue raw materials → process (time input) → receive finished goods. Standard and actual cost diverge, and that variance is the key information PP must reveal.' } },
+    { h:{ ko:'우리 회사 케이스 (2단계 멀티레벨)', en:'Our case (2-step, multi-level)' } }, { ul:{ ko:['Phase 1: 반제품 SF001 20EA — RM001 60KG+RM002 20KG 출고 + 노무20h·기계10h. 표준 $18/EA보다 실제 투입이 커 차이 발생.','Phase 2: 완제품 FG001 10EA — SF001 10EA+RM001 5KG + 노무5h·기계2.5h.','반드시 하위(반제품)부터 만들고 정산해야 상위 원가가 맞는다.'], en:['Phase 1: SF001 20EA — issue RM001 60KG + RM002 20KG + labor 20h/machine 10h. Actual input exceeds standard $18/EA, creating a variance.','Phase 2: FG001 10EA — issue SF001 10EA + RM001 5KG + labor 5h/machine 2.5h.','Always make and settle the lower level (semi-finished) first so the upper-level cost is correct.'] } },
+    { h:{ ko:'팀장 통제점', en:'Team lead controls' } }, { ul:{ ko:['하위→상위 생산·정산 순서 준수','실적(수량·시간) 정확성 = 원가 정확성','생산차이 분석: 수율(자재) vs 설비/숙련(시간)','WIP(재공품) 관리'], en:['Follow the lower→upper production/settlement order','Accuracy of confirmations (qty/time) = accuracy of cost','Variance analysis: yield (material) vs equipment/skill (time)','Manage WIP (work in process)'] } },
+    { h:{ ko:'핸드오프', en:'Handoffs' } }, { ul:{ ko:['← MM: 원자재 입고','← CO: 노무·기계 단가','→ CO: 생산차이 정산','→ SD: 완제품 재고'], en:['← MM: raw material receipt','← CO: labor/machine rates','→ CO: settle production variance','→ SD: finished goods inventory'] } },
   ]},
-  { id:'co', icon:'📊', title:'CO — 원가', blocks:[
-    { h:'미션' }, { p:'외부 보고용 회계(FI)와 별개로, 이 제품이 진짜 얼마 들고 어디서 남는지를 내부 의사결정용으로 계산한다.' },
-    { h:'비즈니스 현실 (SAP 이전)' }, { p:'연초에 표준원가(가격표·견적 기준)를 정하고, 한 달 돌린 뒤 실제와의 차이를 월말 정산해 재고·매출원가를 실제에 맞게 보정하고 제품·고객별 진짜 마진을 본다.' },
-    { h:'우리 회사 케이스' }, { ul:['표준원가: 액티비티 단가 → 하위(SF001) → 상위(FG001) 계산/릴리즈','실제원가 결산: 구매가격차이+생산차이를 재고분/판매분으로 배부','수익성 분석: 표준 마진 vs 실제 마진 비교'] },
-    { h:'팀장 통제점' }, { ul:['표준원가 적정성(느슨/빡빡 균형)','차이 해석: 일시 변동인가 표준 오류 신호인가','결산 순서·마감(마감 후 재오픈 불가)','제품/고객 수익성으로 의사결정 지원'] },
-    { h:'핸드오프' }, { ul:['← MM 구매가격차이 / ← PP 생산차이 / ← SD 매출·수량','→ FI·경영: 보정된 원가·수익성 리포트'] },
+  { id:'co', icon:'📊', title:{ ko:'CO — 원가', en:'CO — Costing' }, blocks:[
+    { h:{ ko:'미션', en:'Mission' } }, { p:{ ko:'외부 보고용 회계(FI)와 별개로, 이 제품이 진짜 얼마 들고 어디서 남는지를 내부 의사결정용으로 계산한다.', en:'Separately from external reporting (FI), calculate for internal decisions how much a product truly costs and where margin is made or lost.' } },
+    { h:{ ko:'비즈니스 현실 (SAP 이전)', en:'Business reality (before SAP)' } }, { p:{ ko:'연초에 표준원가(가격표·견적 기준)를 정하고, 한 달 돌린 뒤 실제와의 차이를 월말 정산해 재고·매출원가를 실제에 맞게 보정하고 제품·고객별 진짜 마진을 본다.', en:'Set standard cost at year start (basis for price lists and quotes); after running a month, settle the difference vs actual at month-end to adjust inventory and COGS toward actual, and view true margin by product/customer.' } },
+    { h:{ ko:'우리 회사 케이스', en:'Our case' } }, { ul:{ ko:['표준원가: 액티비티 단가 → 하위(SF001) → 상위(FG001) 계산/릴리즈','실제원가 결산: 구매가격차이+생산차이를 재고분/판매분으로 배부','수익성 분석: 표준 마진 vs 실제 마진 비교'], en:['Standard cost: activity rates → lower (SF001) → upper (FG001) calculate/release','Actual costing: allocate purchase + production variances to inventory vs sold portions','Profitability: compare standard margin vs actual margin'] } },
+    { h:{ ko:'팀장 통제점', en:'Team lead controls' } }, { ul:{ ko:['표준원가 적정성(느슨/빡빡 균형)','차이 해석: 일시 변동인가 표준 오류 신호인가','결산 순서·마감(마감 후 재오픈 불가)','제품/고객 수익성으로 의사결정 지원'], en:['Adequacy of standard cost (loose vs tight balance)','Interpret variance: a temporary swing, or a sign the standard itself is wrong','Closing order and lock (period cannot be reopened after closing)','Support decisions with product/customer profitability'] } },
+    { h:{ ko:'핸드오프', en:'Handoffs' } }, { ul:{ ko:['← MM 구매가격차이 / ← PP 생산차이 / ← SD 매출·수량','→ FI·경영: 보정된 원가·수익성 리포트'], en:['← MM purchase variance / ← PP production variance / ← SD revenue & qty','→ FI & management: adjusted cost & profitability reports'] } },
   ]},
-  { id:'sd', icon:'💰', title:'SD — 영업', blocks:[
-    { h:'미션' }, { p:'고객 주문을 받아 약속한 물건을 약속한 조건으로 출하·청구하고, 매출과 채권을 정확히 인식·회수한다.' },
-    { h:'비즈니스 현실 (SAP 이전)' }, { p:'주문 → 재고·납기 약속 → 출고·배송 → 송장 발행 → 수금. 출하 시점(매출원가 인식)과 청구 시점(매출·채권 인식)은 다르며, 혼동하면 손익이 왜곡된다.' },
-    { h:'우리 회사 케이스' }, { p:'C001 Northstar Motors에 FG001 5EA @ $150 = $750 판매. 출하 시 재고 감소+매출원가(표준 $225) 인식, 청구 시 매출·채권 $750 인식, 수금 후 채권 $0. 실제 매출원가는 CO 결산 후 보정.' },
-    { h:'팀장 통제점' }, { ul:['여신·납기 약속(재고 가용성·신용 한도)','가격·할인·운임 조건','출하 vs 청구 타이밍(매출 인식 시점)','채권 회수·연체·대손 관리'] },
-    { h:'핸드오프' }, { ul:['← PP: 완제품 재고','→ FI: 매출·채권·수금','→ CO: 매출·수량(수익성)'] },
+  { id:'sd', icon:'💰', title:{ ko:'SD — 영업', en:'SD — Sales' }, blocks:[
+    { h:{ ko:'미션', en:'Mission' } }, { p:{ ko:'고객 주문을 받아 약속한 물건을 약속한 조건으로 출하·청구하고, 매출과 채권을 정확히 인식·회수한다.', en:'Take customer orders, deliver and bill the promised goods on the promised terms, and recognize and collect revenue and receivables accurately.' } },
+    { h:{ ko:'비즈니스 현실 (SAP 이전)', en:'Business reality (before SAP)' } }, { p:{ ko:'주문 → 재고·납기 약속 → 출고·배송 → 송장 발행 → 수금. 출하 시점(매출원가 인식)과 청구 시점(매출·채권 인식)은 다르며, 혼동하면 손익이 왜곡된다.', en:'Order → confirm stock/lead time → pick & ship → issue invoice → collect. The goods-issue moment (recognize COGS) and the billing moment (recognize revenue/receivable) differ; confusing them distorts P&L.' } },
+    { h:{ ko:'우리 회사 케이스', en:'Our case' } }, { p:{ ko:'C001 Northstar Motors에 FG001 5EA @ $150 = $750 판매. 출하 시 재고 감소+매출원가(표준 $225) 인식, 청구 시 매출·채권 $750 인식, 수금 후 채권 $0. 실제 매출원가는 CO 결산 후 보정.', en:'Sell FG001 5EA @ $150 = $750 to C001 Northstar Motors. At goods issue: inventory down + COGS (standard $225) recognized; at billing: revenue & receivable $750; after collection receivable $0. Actual COGS is adjusted after CO closing.' } },
+    { h:{ ko:'팀장 통제점', en:'Team lead controls' } }, { ul:{ ko:['여신·납기 약속(재고 가용성·신용 한도)','가격·할인·운임 조건','출하 vs 청구 타이밍(매출 인식 시점)','채권 회수·연체·대손 관리'], en:['Credit & lead-time commitments (stock availability, credit limit)','Price, discount, and freight terms','Goods-issue vs billing timing (revenue recognition)','Receivables collection, overdue, and bad-debt management'] } },
+    { h:{ ko:'핸드오프', en:'Handoffs' } }, { ul:{ ko:['← PP: 완제품 재고','→ FI: 매출·채권·수금','→ CO: 매출·수량(수익성)'], en:['← PP: finished goods inventory','→ FI: revenue, receivable, collection','→ CO: revenue & qty (profitability)'] } },
   ]},
-  { id:'fi', icon:'📒', title:'FI — 재무회계', blocks:[
-    { h:'미션' }, { p:'회사의 모든 돈의 움직임을 법적·외부 보고 기준으로 빠짐없이 회계장부에 기록하고, 채권·채무·현금을 관리한다.' },
-    { h:'비즈니스 현실 (SAP 이전)' }, { p:'FI는 스스로 거래를 만들지 않는다. MM·PP·SD의 사건이 자동 분개되어 FI로 모인다. FI의 일은 그 기록의 정확성·완전성을 보증하고 채권·채무·현금을 마감하는 것이다.' },
-    { h:'분개의 흐름 (차변=대변)' }, { ul:['입고: (차)원재료 / (대)GR-IR+구매가격차이','출하: (차)매출원가 / (대)완제품','청구: (차)매출채권 / (대)매출','수금: (차)현금 / (대)매출채권'] },
-    { h:'팀장 통제점' }, { ul:['계정 결정의 정확성','마감(누락·미결 항목 점검)','보조원장과 총계정원장 정합성','전표 추적성(내부통제·감사)'] },
-    { h:'핸드오프' }, { ul:['← 모든 모듈이 FI로 수렴','→ 경영·외부: 재무제표·세무·보고'] },
+  { id:'fi', icon:'📒', title:{ ko:'FI — 재무회계', en:'FI — Financial Accounting' }, blocks:[
+    { h:{ ko:'미션', en:'Mission' } }, { p:{ ko:'회사의 모든 돈의 움직임을 법적·외부 보고 기준으로 빠짐없이 회계장부에 기록하고, 채권·채무·현금을 관리한다.', en:'Record every cash movement of the company completely on a legal/external-reporting basis, and manage receivables, payables, and cash.' } },
+    { h:{ ko:'비즈니스 현실 (SAP 이전)', en:'Business reality (before SAP)' } }, { p:{ ko:'FI는 스스로 거래를 만들지 않는다. MM·PP·SD의 사건이 자동 분개되어 FI로 모인다. FI의 일은 그 기록의 정확성·완전성을 보증하고 채권·채무·현금을 마감하는 것이다.', en:'FI does not create transactions itself. Events from MM/PP/SD are auto-posted and converge into FI. Its role is to assure the accuracy and completeness of those records and to close receivables, payables, and cash.' } },
+    { h:{ ko:'분개의 흐름 (차변=대변)', en:'Journal flow (debit = credit)' } }, { ul:{ ko:['입고: (차)원재료 / (대)GR-IR+구매가격차이','출하: (차)매출원가 / (대)완제품','청구: (차)매출채권 / (대)매출','수금: (차)현금 / (대)매출채권'], en:['Receipt: (Dr) Raw material / (Cr) GR-IR + purchase price variance','Goods issue: (Dr) COGS / (Cr) Finished goods','Billing: (Dr) Receivable / (Cr) Revenue','Collection: (Dr) Cash / (Cr) Receivable'] } },
+    { h:{ ko:'팀장 통제점', en:'Team lead controls' } }, { ul:{ ko:['계정 결정의 정확성','마감(누락·미결 항목 점검)','보조원장과 총계정원장 정합성','전표 추적성(내부통제·감사)'], en:['Accuracy of account determination','Closing (check omissions / open items)','Subledger vs general ledger consistency','Document traceability (internal control / audit)'] } },
+    { h:{ ko:'핸드오프', en:'Handoffs' } }, { ul:{ ko:['← 모든 모듈이 FI로 수렴','→ 경영·외부: 재무제표·세무·보고'], en:['← All modules converge into FI','→ Management & external: financial statements, tax, reporting'] } },
   ]},
-  { id:'handoff', icon:'🔗', title:'모듈 간 핸드오프', blocks:[
-    { p:'행(FROM)이 열(TO)에게 무엇을 넘기는지. 예: PP행 × SD열 = PP가 SD에 완제품 재고를 넘긴다.' },
-    { tbl:{ head:['FROM \\ TO','MM','PP','CO','SD','FI'], rows:[
-      ['MM','—','원자재','구매가격차이','—','매입채무'],
-      ['PP','자재소요','—','생산차이','완제품','재고·원가'],
-      ['CO','—','액티비티 단가','—','수익성','보정 원가'],
-      ['SD','—','—','매출·수량','—','매출·채권'],
-      ['FI','지급','—','결산데이터','여신','—'],
-    ]}},
+  { id:'handoff', icon:'🔗', title:{ ko:'모듈 간 핸드오프', en:'Cross-Module Handoffs' }, blocks:[
+    { p:{ ko:'행(FROM)이 열(TO)에게 무엇을 넘기는지. 예: PP행 × SD열 = PP가 SD에 완제품 재고를 넘긴다.', en:'Which row (FROM) hands what to which column (TO). e.g., PP row × SD column = PP hands finished goods inventory to SD.' } },
+    { tbl:{
+      ko:{ head:['FROM \\ TO','MM','PP','CO','SD','FI'], rows:[
+        ['MM','—','원자재','구매가격차이','—','매입채무'],
+        ['PP','자재소요','—','생산차이','완제품','재고·원가'],
+        ['CO','—','액티비티 단가','—','수익성','보정 원가'],
+        ['SD','—','—','매출·수량','—','매출·채권'],
+        ['FI','지급','—','결산데이터','여신','—'],
+      ]},
+      en:{ head:['FROM \\ TO','MM','PP','CO','SD','FI'], rows:[
+        ['MM','—','Materials','Purchase variance','—','Payables'],
+        ['PP','Material need','—','Production variance','Finished goods','Inventory/cost'],
+        ['CO','—','Activity rates','—','Profitability','Adjusted cost'],
+        ['SD','—','—','Revenue/qty','—','Revenue/receivable'],
+        ['FI','Payment','—','Closing data','Credit','—'],
+      ]},
+    }},
   ]},
-  { id:'checklist', icon:'✅', title:'팀장 체크리스트', blocks:[
-    { p:'각 거래를 입력하기 전에, 팀장은 다음을 비즈니스로 설명할 수 있어야 합니다.' },
-    { ul:['현실에서 무슨 사건인가? (물건/돈의 이동)','근거 서류는? (발주서/입고증/송장/주문서)','재고·원가·손익에 미치는 영향은?','전 단계(누구로부터)·다음 단계(누구에게)는?','차이(표준 vs 실제)가 생기면 그 의미는?','통제점은? (3-way matching·여신·마감·순서)'] },
-    { p:'이 6가지에 답할 수 있으면, T-code는 그 답을 시스템에 옮겨 적는 단순 작업이 됩니다.' },
+  { id:'checklist', icon:'✅', title:{ ko:'팀장 체크리스트', en:'Team Lead Checklist' }, blocks:[
+    { p:{ ko:'각 거래를 입력하기 전에, 팀장은 다음을 비즈니스로 설명할 수 있어야 합니다.', en:'Before entering each transaction, the team lead should be able to explain the following in business terms.' } },
+    { ul:{ ko:['현실에서 무슨 사건인가? (물건/돈의 이동)','근거 서류는? (발주서/입고증/송장/주문서)','재고·원가·손익에 미치는 영향은?','전 단계(누구로부터)·다음 단계(누구에게)는?','차이(표준 vs 실제)가 생기면 그 의미는?','통제점은? (3-way matching·여신·마감·순서)'], en:['What real event is this? (movement of goods/cash)','What is the source document? (PO/GR/invoice/sales order)','What is the impact on inventory, cost, and P&L?','Previous step (from whom) and next step (to whom)?','If a variance (standard vs actual) arises, what does it mean?','What is the control point? (3-way matching, credit, closing, sequence)'] } },
+    { p:{ ko:'이 6가지에 답할 수 있으면, T-code는 그 답을 시스템에 옮겨 적는 단순 작업이 됩니다.', en:'If you can answer these six, the T-code becomes the simple act of transcribing those answers into the system.' } },
   ]},
 ];
-const GuideBlock = ({ b }) => {
-  if (b.h) return <h4 className="font-bold text-slate-800 mt-3 mb-1 text-sm">{b.h}</h4>;
-  if (b.p) return <p className="text-xs text-slate-600 leading-relaxed mb-1.5">{b.p}</p>;
-  if (b.ul) return <ul className="list-disc pl-5 space-y-0.5 mb-1.5">{b.ul.map((x, i) => <li key={i} className="text-xs text-slate-600 leading-relaxed">{x}</li>)}</ul>;
-  if (b.flow) return <div className="flex flex-wrap items-center gap-1.5 mb-2">{b.flow.map((x, i) => <React.Fragment key={i}><span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-full">{x}</span>{i < b.flow.length - 1 && <span className="text-slate-400">→</span>}</React.Fragment>)}</div>;
-  if (b.tbl) return (
+const GuideBlock = ({ b, lang }) => {
+  const pick = o => (o && (o[lang] !== undefined ? o[lang] : o.ko));
+  if (b.h) return <h4 className="font-bold text-slate-800 mt-3 mb-1 text-sm">{pick(b.h)}</h4>;
+  if (b.p) return <p className="text-xs text-slate-600 leading-relaxed mb-1.5">{pick(b.p)}</p>;
+  if (b.ul) return <ul className="list-disc pl-5 space-y-0.5 mb-1.5">{pick(b.ul).map((x, i) => <li key={i} className="text-xs text-slate-600 leading-relaxed">{x}</li>)}</ul>;
+  if (b.flow) { const items = pick(b.flow); return <div className="flex flex-wrap items-center gap-1.5 mb-2">{items.map((x, i) => <React.Fragment key={i}><span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-full">{x}</span>{i < items.length - 1 && <span className="text-slate-400">→</span>}</React.Fragment>)}</div>; }
+  if (b.tbl) { const t = pick(b.tbl); return (
     <div className="overflow-x-auto mb-2">
       <table className="w-full text-xs border-collapse">
-        <thead><tr className="bg-slate-100 text-slate-700 text-left">{b.tbl.head.map((h, i) => <th key={i} className="px-2 py-1 border border-slate-200 font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
-        <tbody>{b.tbl.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className="px-2 py-1 border border-slate-200 text-slate-600 align-top">{c}</td>)}</tr>)}</tbody>
+        <thead><tr className="bg-slate-100 text-slate-700 text-left">{t.head.map((h, i) => <th key={i} className="px-2 py-1 border border-slate-200 font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
+        <tbody>{t.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className="px-2 py-1 border border-slate-200 text-slate-600 align-top">{c}</td>)}</tr>)}</tbody>
       </table>
     </div>
-  );
+  ); }
   return null;
 };
 const GuideModal = ({ lang, onClose }) => {
   const ko = lang === 'ko';
   const [sec, setSec] = useState(GUIDE_SECTIONS[0].id);
   const cur = GUIDE_SECTIONS.find(s => s.id === sec) || GUIDE_SECTIONS[0];
+  const tt = s => (s.title[lang] !== undefined ? s.title[lang] : s.title.ko);
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1478,12 +1496,12 @@ const GuideModal = ({ lang, onClose }) => {
         <div className="flex flex-1 min-h-0">
           <nav className="w-36 shrink-0 border-r border-slate-100 overflow-y-auto p-2 space-y-0.5 bg-slate-50">
             {GUIDE_SECTIONS.map(s => (
-              <button key={s.id} onClick={() => setSec(s.id)} className={`w-full text-left text-xs px-2.5 py-1.5 rounded transition-colors ${sec === s.id ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-600 hover:bg-slate-200'}`}>{s.icon} {s.title}</button>
+              <button key={s.id} onClick={() => setSec(s.id)} className={`w-full text-left text-xs px-2.5 py-1.5 rounded transition-colors ${sec === s.id ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-600 hover:bg-slate-200'}`}>{s.icon} {tt(s)}</button>
             ))}
           </nav>
           <div className="flex-1 overflow-y-auto p-4">
-            <h3 className="text-base font-extrabold text-slate-800 mb-2">{cur.icon} {cur.title}</h3>
-            {cur.blocks.map((b, i) => <GuideBlock key={i} b={b} />)}
+            <h3 className="text-base font-extrabold text-slate-800 mb-2">{cur.icon} {tt(cur)}</h3>
+            {cur.blocks.map((b, i) => <GuideBlock key={i} b={b} lang={lang} />)}
           </div>
         </div>
         <div className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100 shrink-0">{ko ? 'ABC Auto Parts(가상) 시나리오 기준 · SAP는 SAP SE의 등록상표' : 'Based on ABC Auto Parts (fictitious) · SAP is a trademark of SAP SE'}</div>

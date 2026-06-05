@@ -2460,6 +2460,130 @@ const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, l
 /* =========================================================================
    TAB 7: DRYRUN (STATIC E2E REFERENCE TABLE)
    ========================================================================= */
+/* =========================================================================
+   FLOW TAB — single-image end-to-end business flow diagram (SVG)
+   ========================================================================= */
+const FlowTab = ({ lang }) => {
+  const ko = lang === 'ko';
+  const t = (k, e) => (ko ? k : e);
+  const exportImg = (type) => {
+    const svg = document.getElementById('flowSvg');
+    if (!svg) return;
+    const xml = new XMLSerializer().serializeToString(svg);
+    if (type === 'svg') {
+      const blob = new Blob([xml], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'business-flow.svg'; a.click();
+      URL.revokeObjectURL(url); return;
+    }
+    const b64 = btoa(unescape(encodeURIComponent(xml)));
+    const img = new Image();
+    const vb = svg.viewBox.baseVal;
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = vb.width * 2; c.height = vb.height * 2;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'business-flow.png'; a.click(); });
+    };
+    img.src = 'data:image/svg+xml;base64,' + b64;
+  };
+  const box = (x, y, w, h, fill, stroke) => <rect x={x} y={y} width={w} height={h} rx="10" fill={fill} stroke={stroke} strokeWidth="1.5" />;
+  return (
+    <div>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div>
+          <h2 className="text-base font-bold text-slate-800">🔀 {t('전체 업무 흐름', 'End-to-End Business Flow')}</h2>
+          <p className="text-xs text-slate-500 mt-0.5">{t('마스터/BOM부터 구매·생산·판매, 그리고 원가(CO)·회계(FI)까지 한 장으로', 'Master/BOM to Procure-Produce-Sell, plus Costing (CO) and Accounting (FI) in one view')}</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => exportImg('png')} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors">⬇ PNG</button>
+          <button onClick={() => exportImg('svg')} className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition-colors">⬇ SVG</button>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-slate-200 p-3 overflow-x-auto">
+        <svg id="flowSvg" viewBox="0 0 1060 540" className="w-full h-auto" style={{ minWidth: '820px' }} xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arr" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L6.5,3 L0,6 Z" fill="#64748b" />
+            </marker>
+          </defs>
+          <rect x="0" y="0" width="1060" height="540" fill="#ffffff" />
+
+          {/* cycle brackets */}
+          <path d="M232,52 L232,42 L408,42 L408,52" fill="none" stroke="#2563eb" strokeWidth="1.2" />
+          <text x="320" y="34" textAnchor="middle" fontSize="12" fontWeight="700" fill="#1e3a8a">{t('P2P 구매~지급', 'P2P (Procure-to-Pay)')}</text>
+          <path d="M692,52 L692,42 L868,42 L868,52" fill="none" stroke="#e11d48" strokeWidth="1.2" />
+          <text x="780" y="34" textAnchor="middle" fontSize="12" fontWeight="700" fill="#9f1239">{t('O2C 수주~수금', 'O2C (Order-to-Cash)')}</text>
+
+          {/* Master */}
+          {box(20, 60, 162, 96, '#d1fae5', '#059669')}
+          <text x="101" y="90" textAnchor="middle" fontSize="13" fontWeight="800" fill="#065f46">🧱 {t('마스터 & BOM', 'Master & BOM')}</text>
+          <text x="101" y="112" textAnchor="middle" fontSize="10.5" fill="#047857">{t('자재 · BOM · 표준원가', 'Material · BOM · Std cost')}</text>
+          <text x="101" y="132" textAnchor="middle" fontSize="10.5" fill="#047857">RM → SF → FG</text>
+          <line x1="182" y1="108" x2="228" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
+          <text x="205" y="101" textAnchor="middle" fontSize="9" fill="#64748b">{t('정의', 'define')}</text>
+
+          {/* MM */}
+          {box(230, 60, 180, 96, '#dbeafe', '#2563eb')}
+          <text x="320" y="88" textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e3a8a">🛒 {t('MM 구매', 'MM Procurement')}</text>
+          <text x="320" y="112" textAnchor="middle" fontSize="10" fill="#1d4ed8">{t('발주 → 입고 → 송장', 'PO → Receipt → Invoice')}</text>
+          <text x="320" y="130" textAnchor="middle" fontSize="10" fill="#1d4ed8">→ {t('지급', 'Payment')}</text>
+          <line x1="410" y1="108" x2="458" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
+          <text x="434" y="101" textAnchor="middle" fontSize="9" fill="#64748b">{t('원자재', 'material')}</text>
+
+          {/* PP */}
+          {box(460, 60, 180, 96, '#fef3c7', '#d97706')}
+          <text x="550" y="88" textAnchor="middle" fontSize="13" fontWeight="800" fill="#92400e">🏭 {t('PP 생산', 'PP Production')}</text>
+          <text x="550" y="112" textAnchor="middle" fontSize="9.5" fill="#b45309">{t('생산오더 → 출고 → 확정', 'Order → Issue → Confirm')}</text>
+          <text x="550" y="130" textAnchor="middle" fontSize="9.5" fill="#b45309">→ {t('입고 → 정산', 'GR → Settle')}</text>
+          <line x1="640" y1="108" x2="688" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
+          <text x="664" y="101" textAnchor="middle" fontSize="9" fill="#64748b">{t('완제품', 'finished')}</text>
+
+          {/* SD */}
+          {box(690, 60, 180, 96, '#ffe4e6', '#e11d48')}
+          <text x="780" y="88" textAnchor="middle" fontSize="13" fontWeight="800" fill="#9f1239">💵 {t('SD 매출', 'SD Sales')}</text>
+          <text x="780" y="112" textAnchor="middle" fontSize="10" fill="#be123c">{t('판매오더 → 출하', 'Order → Delivery')}</text>
+          <text x="780" y="130" textAnchor="middle" fontSize="10" fill="#be123c">→ {t('청구 → 수취', 'Billing → Receipt')}</text>
+          <line x1="870" y1="108" x2="916" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
+
+          {/* Cash */}
+          {box(918, 78, 120, 60, '#dcfce7', '#16a34a')}
+          <text x="978" y="104" textAnchor="middle" fontSize="12" fontWeight="800" fill="#166534">💰 {t('현금', 'Cash')}</text>
+          <text x="978" y="122" textAnchor="middle" fontSize="9.5" fill="#15803d">{t('회수 / 마진', 'collect / margin')}</text>
+
+          {/* downward feeds to CO */}
+          <line x1="320" y1="156" x2="320" y2="262" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
+          <text x="326" y="210" fontSize="9" fill="#64748b">{t('구매가격차이', 'purchase var.')}</text>
+          <line x1="550" y1="156" x2="550" y2="262" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
+          <text x="556" y="210" fontSize="9" fill="#64748b">{t('생산차이', 'production var.')}</text>
+          <line x1="780" y1="156" x2="780" y2="262" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
+          <text x="786" y="210" fontSize="9" fill="#64748b">{t('매출 · 수량', 'revenue · qty')}</text>
+
+          {/* CO band */}
+          {box(20, 262, 1018, 74, '#ede9fe', '#7c3aed')}
+          <text x="40" y="290" fontSize="13" fontWeight="800" fill="#5b21b6">📊 {t('CO 관리회계 (Controlling)', 'CO — Controlling')}</text>
+          <text x="40" y="314" fontSize="11" fill="#6d28d9">{t('표준원가 vs 실제원가 결산  →  제품 · 고객 수익성 분석 (내부 의사결정)', 'Standard vs actual costing  →  product · customer profitability (internal decisions)')}</text>
+
+          {/* CO -> FI */}
+          <line x1="529" y1="336" x2="529" y2="372" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
+          <text x="535" y="358" fontSize="9" fill="#64748b">{t('원가 보정', 'cost adj.')}</text>
+
+          {/* FI band */}
+          {box(20, 372, 1018, 74, '#e2e8f0', '#475569')}
+          <text x="40" y="400" fontSize="13" fontWeight="800" fill="#1e293b">📒 {t('FI 재무회계 (Financial Accounting)', 'FI — Financial Accounting')}</text>
+          <text x="40" y="424" fontSize="11" fill="#334155">{t('모든 거래를 회계장부에 자동 기록 — 복식부기 (차변 = 대변), 외부 보고', 'All transactions auto-posted to the ledger — double entry (Dr = Cr), external reporting')}</text>
+
+          {/* footer note */}
+          <text x="20" y="478" fontSize="10.5" fill="#64748b">{t('흐름: 마스터/BOM 정의  →  구매(P2P)  →  생산  →  판매(O2C).  그 위에서 CO가 원가를, FI가 회계를 담당합니다.', 'Flow: define Master/BOM  →  Procure (P2P)  →  Produce  →  Sell (O2C).  CO handles cost, FI handles accounting on top.')}</text>
+          <text x="20" y="500" fontSize="10.5" fill="#94a3b8">{t('* ABC Auto Parts(가상) 시나리오 기준', '* Based on ABC Auto Parts (fictitious) scenario')}</text>
+        </svg>
+      </div>
+    </div>
+  );
+};
+
 const DryrunTab = ({ lang }) => {
   const modColor = {
     Master:'bg-gray-100 text-gray-700',
@@ -2967,6 +3091,7 @@ function App() {
     { id:'sd', label:tabLabels[4], icon:'💵' },
     { id:'ledger', label:tabLabels[5], icon:'📒' },
     { id:'dryrun', label:'Dryrun', icon:'📊' },
+    { id:'flow', label:'Flow', icon:'🔀' },
     { id:'copa', label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
   ];
 
@@ -2974,7 +3099,7 @@ function App() {
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa'] },
-    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun','ledger'] },
+    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun','flow','ledger'] },
   ];
   const activeGroup = TAB_GROUPS.find(g => g.tabIds.includes(activeTab)) || TAB_GROUPS[0];
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
@@ -3088,6 +3213,7 @@ function App() {
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} />}
         {activeTab==='ledger' && <LedgerTab mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} ckSteps={ckSteps} materials={materials} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
+        {activeTab==='flow' && <FlowTab lang={lang} />}
         {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
       </main>
 

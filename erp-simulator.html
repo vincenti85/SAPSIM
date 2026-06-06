@@ -501,7 +501,7 @@ function buildJournals(p, mats, lang) {
   const sdQty   = sd.qty;
   const sdPrice = sd.salesPrice;
   const sdCOGSu = stdOf(mats, sd.matCode) || fStd;
-  const sdCOGS  = +(sdQty * sdPrice).toFixed(2);
+  const sdCOGS  = +(sdQty * sdCOGSu).toFixed(2);
   const sdRev   = +(sdQty * sdPrice).toFixed(2);
   const sdCust  = sd.customer || 'C001';
 

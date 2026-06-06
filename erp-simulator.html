@@ -84,7 +84,7 @@ const REQUIRED_CSV_COLS = ['MaterialCode','Description','MaterialType','Standard
    ========================================================================= */
 const T = {
   ko: {
-    tabs: ['마스터/BOM','MM 구매','PP 생산','FI/CO 원가','SD 매출','📒 분개원장'],
+    tabs: ['마스터/BOM','MM 구매','PP 생산','FI/CO 원가','SD 매출','📒 분개원장','변수입력'],
     masterGuideTitle: '마스터데이터 & BOM 운용 가이드',
     mmGuideTitle: 'MM 구매 프로세스 운용 가이드',
     ppGuideTitle: 'PP 생산 프로세스 운용 가이드',
@@ -261,7 +261,7 @@ const T = {
     noJournal: '분개 없음',
   },
   en: {
-    tabs: ['Master/BOM','MM Purchase','PP Production','FI/CO Costing','SD Sales','📒 Ledger'],
+    tabs: ['Master/BOM','MM Purchase','PP Production','FI/CO Costing','SD Sales','📒 Ledger','Variables'],
     masterGuideTitle: 'Master Data & BOM Operation Guide',
     mmGuideTitle: 'MM Purchasing Process Guide',
     ppGuideTitle: 'PP Production Process Guide',
@@ -3574,18 +3574,20 @@ function App() {
 
   const tabLabels = T[lang].tabs;
   const tabs = [
-    { id:'master', label:tabLabels[0], icon:'📋' },
-    { id:'mm', label:tabLabels[1], icon:'🛒' },
-    { id:'pp', label:tabLabels[2], icon:'🏭' },
-    { id:'fico', label:tabLabels[3], icon:'🧮' },
-    { id:'sd', label:tabLabels[4], icon:'💵' },
-    { id:'ledger', label:tabLabels[5], icon:'📒' },
-    { id:'dryrun', label:'Dryrun', icon:'📊' },
-    { id:'flow', label:'Flow', icon:'🔀' },
-    { id:'copa', label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
+    { id:'params',  label:tabLabels[6], icon:'🎛️' },
+    { id:'master',  label:tabLabels[0], icon:'📋' },
+    { id:'mm',      label:tabLabels[1], icon:'🛒' },
+    { id:'pp',      label:tabLabels[2], icon:'🏭' },
+    { id:'fico',    label:tabLabels[3], icon:'🧮' },
+    { id:'sd',      label:tabLabels[4], icon:'💵' },
+    { id:'ledger',  label:tabLabels[5], icon:'📒' },
+    { id:'dryrun',  label:'Dryrun',     icon:'📊' },
+    { id:'flow',    label:'Flow',       icon:'🔀' },
+    { id:'copa',    label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
   ];
 
   const TAB_GROUPS = [
+    { id:'grp_params',   label:'Variables', icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa'] },
@@ -3696,6 +3698,7 @@ function App() {
             </p>
           </div>
         )}
+        {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} lang={lang} />}
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} />}
         {activeTab==='pp' && <PPTab ppSteps={ppSteps} setPpSteps={setPpSteps} openPopup={openPopup} ppInv={ppInv} wip={wip} ppVar={ppVar} lang={lang} />}

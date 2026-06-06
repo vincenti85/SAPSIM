@@ -2037,6 +2037,22 @@ function ParametersTab({ simParams, setSimParams, materials, lang }) {
     if (kind === 'sd') setSdErr('');
   }
 
+  const SAMPLE_CSV = {
+    mm: 'MatCode,Qty,POPrice,StdPrice,Vendor\nRM001,100,5.00,5.50,V001\nRM002,20,3.20,3.20,V001',
+    pp: 'OutCode,OutQty,ScrapPct,Components,LaborHr,LaborRate,MachineHr,MachineRate,OHRate\nSF001,20,0,RM001:60;RM002:20,20,14.675,10,14.00,0\nFG001,10,0,SF001:10;RM001:5,5,25,2.5,35,0',
+    sd: 'MatCode,Qty,SalesPrice,Customer\nFG001,5,150,C001',
+  };
+
+  function downloadSampleCSV(kind) {
+    const blob = new Blob([SAMPLE_CSV[kind]], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sample-${kind}-params.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function setMmField(idx, key, val) {
     setSimParams(prev => {
       const next = prev.mm.map((r, i) => i === idx ? { ...r, [key]: key === 'matCode' || key === 'vendor' ? val : parseFloat(val) || 0 } : r);
@@ -2071,6 +2087,9 @@ function ParametersTab({ simParams, setSimParams, materials, lang }) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-slate-700">{String.fromCodePoint(0x1F6D2)} {lbl('구매 변수 (MM)','Purchase Variables (MM)')}</h3>
           <div className="flex gap-2">
+            <button onClick={() => downloadSampleCSV('mm')} className="bg-emerald-600 text-white text-xs px-3 py-1 rounded hover:bg-emerald-700">
+              {lbl('샘플 CSV','Sample CSV')}
+            </button>
             <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">
               {lbl('CSV 업로드','Upload CSV')}
               <input type="file" accept=".csv,text/csv" onChange={e => handleUpload('mm', e)} className="hidden" />
@@ -2115,6 +2134,9 @@ function ParametersTab({ simParams, setSimParams, materials, lang }) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-slate-700">{String.fromCodePoint(0x1F3ED)} {lbl('생산 변수 (PP)','Production Variables (PP)')}</h3>
           <div className="flex gap-2">
+            <button onClick={() => downloadSampleCSV('pp')} className="bg-emerald-600 text-white text-xs px-3 py-1 rounded hover:bg-emerald-700">
+              {lbl('샘플 CSV','Sample CSV')}
+            </button>
             <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">
               {lbl('CSV 업로드','Upload CSV')}
               <input type="file" accept=".csv,text/csv" onChange={e => handleUpload('pp', e)} className="hidden" />
@@ -2189,6 +2211,9 @@ function ParametersTab({ simParams, setSimParams, materials, lang }) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-slate-700">{String.fromCodePoint(0x1F4B5)} {lbl('영업 변수 (SD)','Sales Variables (SD)')}</h3>
           <div className="flex gap-2">
+            <button onClick={() => downloadSampleCSV('sd')} className="bg-emerald-600 text-white text-xs px-3 py-1 rounded hover:bg-emerald-700">
+              {lbl('샘플 CSV','Sample CSV')}
+            </button>
             <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">
               {lbl('CSV 업로드','Upload CSV')}
               <input type="file" accept=".csv,text/csv" onChange={e => handleUpload('sd', e)} className="hidden" />

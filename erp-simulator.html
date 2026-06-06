@@ -44,6 +44,7 @@ const DEFAULT_MATERIALS = [
 const DEFAULT_PARAMS = {
   mm: [
     { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' },
+    { matCode:'RM002', qty:20,  poPrice:3.20, stdPrice:3.20, vendor:'V001' },
   ],
   pp: [
     {
@@ -449,7 +450,8 @@ function stdOf(mats, code) {
 
 function buildJournals(p, mats, lang) {
   // ── MM helpers ──
-  const mm = p.mm[0] || { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' };
+  const mm  = p.mm[0] || { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' };
+  const mm2 = p.mm.find(m => m.matCode === 'RM002') || { matCode:'RM002', qty:20, poPrice:3.20, stdPrice:3.20, vendor:'V001' };
   const mmQty        = mm.qty;
   const mmStd        = mm.stdPrice;
   const mmPO         = mm.poPrice;
@@ -457,6 +459,8 @@ function buildJournals(p, mats, lang) {
   const mmGRIR       = +(mmQty * mmPO).toFixed(2);
   const mmPPV        = +(mmQty * (mmStd - mmPO)).toFixed(2);
   const mmVendor     = mm.vendor || 'V001';
+  // RM002 purchase helpers (for PP GI journal amounts)
+  const mm2Std = mm2.stdPrice;
 
   // ── PP helpers ──
   const ppH = p.pp.find(o => o.outCode === 'SF001') || p.pp[0] ||
@@ -3406,8 +3410,9 @@ function App() {
     const ppF0 = simParams.pp.find(o => o.outCode === 'FG001') || simParams.pp[1] ||
       { outCode:'FG001', outQty:10, components:[{code:'SF001',consumQty:10},{code:'RM001',consumQty:5}] };
 
+    const mm1 = simParams.mm.find(m => m.matCode === 'RM002') || { qty:20, stdPrice:3.20, poPrice:3.20 };
     const rm001Std = mm0.stdPrice;
-    const rm002Std = parseFloat((materials.find(m => m.MaterialCode === 'RM002') || {StandardPrice:'3.20'}).StandardPrice);
+    const rm002Std = mm1.stdPrice;
     const sf001Std = parseFloat((materials.find(m => m.MaterialCode === 'SF001') || {StandardPrice:'18.00'}).StandardPrice);
     const fg001Std = parseFloat((materials.find(m => m.MaterialCode === 'FG001') || {StandardPrice:'45.00'}).StandardPrice);
 
@@ -3418,7 +3423,7 @@ function App() {
     if (ppSteps.gi_f) rm001 -= rm001_f;
 
     const rm002_h = (ppH0.components.find(c=>c.code==='RM002') || {consumQty:20}).consumQty;
-    let rm002 = 20;
+    let rm002 = mmSteps.migo_gr ? mm1.qty : 0;
     if (ppSteps.gi_h) rm002 -= rm002_h;
 
     let halb = 0;

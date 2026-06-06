@@ -2868,6 +2868,212 @@ const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, l
 /* =========================================================================
    FLOW TAB — single-image end-to-end business flow diagram (SVG)
    ========================================================================= */
+/* =========================================================================
+   SCRIPT TAB — Business scenario meeting minutes
+   ========================================================================= */
+const ScriptTab = ({ lang }) => {
+  const ko = lang === 'ko';
+  const t = (k, e) => ko ? k : e;
+
+  const ROLES = [
+    { id:'proc', color:'bg-blue-100 text-blue-800 border-blue-200',    dot:'bg-blue-500',  name:t('구매팀  박민준','Procurement  M. Park'),  title:t('구매 담당자','Procurement Officer') },
+    { id:'prod', color:'bg-green-100 text-green-800 border-green-200', dot:'bg-green-500', name:t('생산팀  이서연','Production  S. Lee'),    title:t('생산 계획자','Production Planner') },
+    { id:'cost', color:'bg-purple-100 text-purple-800 border-purple-200', dot:'bg-purple-500', name:t('원가팀  김도현','Costing  D. Kim'),   title:t('원가 담당자','Cost Accountant') },
+    { id:'sale', color:'bg-orange-100 text-orange-800 border-orange-200', dot:'bg-orange-500', name:t('영업팀  최지우','Sales  J. Choi'),    title:t('영업 담당자','Sales Officer') },
+    { id:'fin',  color:'bg-red-100 text-red-800 border-red-200',       dot:'bg-red-500',   name:t('재무팀  정수아','Finance  S. Jeong'),    title:t('재무 담당자','Finance Officer') },
+  ];
+
+  const STEPS = [
+    {
+      phase: t('1단계 · 구매 (Procurement)','Phase 1 · Procurement'),
+      phaseColor: 'bg-blue-600',
+      items: [
+        { role:'proc', fn:'F05', action: t('원자재 구매오더 생성','Create Raw Material Purchase Order'),
+          detail: t('RM001 알루미늄 시트 100KG @$5.00, RM002 스틸 봉재 20KG @$3.20 — Summit Aluminum Supply(V001)로 발주','Issue PO to Summit Aluminum Supply (V001): RM001 Aluminum Sheet 100KG @$5.00, RM002 Steel Rod 20KG @$3.20'),
+          result: t('구매약정 기록, 분개 없음','Commitment recorded, no journal entry') },
+        { role:'proc', fn:'F06', action: t('원자재 입고 처리','Post Goods Receipt for Raw Materials'),
+          detail: t('표준가 기준 재고 평가 — RM001 $550 (100KG×$5.50), 구매가격차이(PPV) $50 유리','Inventory valued at std price — RM001 $550 (100KG×$5.50), PPV $50 Favorable'),
+          result: t('Dr 원재료재고 $550 / Cr GR/IR $500, Cr PPV $50','Dr Raw Mat. Inventory $550 / Cr GR/IR $500, Cr PPV $50') },
+        { role:'fin',  fn:'F07', action: t('송장 검증','Invoice Verification'),
+          detail: t('V001 청구서 $500 확인 및 전기','Verify and post vendor invoice $500'),
+          result: t('Dr GR/IR $500 / Cr 외상매입금 AP $500','Dr GR/IR $500 / Cr Accounts Payable $500') },
+        { role:'fin',  fn:'F08', action: t('대금 지급','Vendor Payment'),
+          detail: t('외상매입금 $500 현금 지급 완료','Clear AP $500 with cash payment'),
+          result: t('Dr AP $500 / Cr 현금 $500','Dr AP $500 / Cr Cash $500') },
+      ]
+    },
+    {
+      phase: t('2단계 · 반제품 생산 SF001','Phase 2 · Semi-Finished Production SF001'),
+      phaseColor: 'bg-green-600',
+      items: [
+        { role:'prod', fn:'F09', action: t('SF001 생산오더 생성','Create SF001 Production Order'),
+          detail: t('Bracket Frame 20EA 생산오더 개설, BOM: RM001 60KG + RM002 20KG','Open production order for Bracket Frame 20EA, BOM: RM001 60KG + RM002 20KG'),
+          result: t('생산오더 PLANNED 상태, 분개 없음','Production order in PLANNED status, no journal') },
+        { role:'prod', fn:'F10', action: t('원자재 출고 → WIP','Issue Raw Materials to WIP'),
+          detail: t('BOM 기준 출고: RM001 60KG($330) + RM002 20KG($64) = $394','Issue per BOM: RM001 60KG($330) + RM002 20KG($64) = $394'),
+          result: t('Dr WIP $394 / Cr RM001 $330, Cr RM002 $64','Dr WIP $394 / Cr RM001 $330, Cr RM002 $64') },
+        { role:'prod', fn:'F11', action: t('생산 확정 (Confirmation)','Production Confirmation'),
+          detail: t('실제 작업 투입 — 노무 20h×$14.675=$293.50, 기계 10h×$14.00=$140 = $433.50','Actual activity — Labor 20h×$14.675=$293.50, Machine 10h×$14.00=$140 = $433.50'),
+          result: t('Dr WIP $433.50 / Cr Activity 노무 $293.50, Cr Activity 기계 $140','Dr WIP $433.50 / Cr Activity Labor $293.50, Cr Activity Machine $140') },
+        { role:'prod', fn:'F12', action: t('반제품 입고 (SF001 20EA)','Goods Receipt — SF001 20EA'),
+          detail: t('표준가 $18×20EA = $360 입고. 실제원가 $827.50 vs 표준 $360 → 차이 $467.50 불리','Std price $18×20EA = $360 GR. Actual $827.50 vs Std $360 → Variance $467.50 Unfav.'),
+          result: t('Dr SF001재고 $360 / Cr FactoryOutput $360','Dr SF001 Inventory $360 / Cr Factory Output $360') },
+      ]
+    },
+    {
+      phase: t('3단계 · 완성품 생산 FG001','Phase 3 · Finished Goods Production FG001'),
+      phaseColor: 'bg-teal-600',
+      items: [
+        { role:'prod', fn:'F13', action: t('FG001 생산오더 생성','Create FG001 Production Order'),
+          detail: t('Engine Mount Bracket 10EA 생산오더 개설, BOM: SF001 10EA + RM001 5KG','Open production order for Engine Mount Bracket 10EA, BOM: SF001 10EA + RM001 5KG'),
+          result: t('생산오더 PLANNED 상태, 분개 없음','Production order in PLANNED status, no journal') },
+        { role:'prod', fn:'F14', action: t('부품 출고 → WIP','Issue Components to WIP'),
+          detail: t('SF001 10EA($180) + RM001 5KG($27.50) = $207.50 WIP 투입','SF001 10EA($180) + RM001 5KG($27.50) = $207.50 issued to WIP'),
+          result: t('Dr WIP $207.50 / Cr SF001 $180, Cr RM001 $27.50','Dr WIP $207.50 / Cr SF001 $180, Cr RM001 $27.50') },
+        { role:'prod', fn:'F15', action: t('완성품 확정 (Confirmation)','Finished Goods Confirmation'),
+          detail: t('노무 5h×$25=$125, 기계 2.5h×$35=$87.50 = $212.50','Labor 5h×$25=$125, Machine 2.5h×$35=$87.50 = $212.50'),
+          result: t('Dr WIP $212.50 / Cr Activity 노무 $125, Cr Activity 기계 $87.50','Dr WIP $212.50 / Cr Activity Labor $125, Cr Activity Machine $87.50') },
+        { role:'prod', fn:'F16', action: t('완성품 입고 (FG001 10EA)','Goods Receipt — FG001 10EA'),
+          detail: t('표준가 $45×10EA = $450 입고. 실제 $420 vs 표준 $450 → 차이 -$30 유리','Std price $45×10EA = $450 GR. Actual $420 vs Std $450 → Variance -$30 Fav.'),
+          result: t('Dr FG001재고 $450 / Cr FactoryOutput $450','Dr FG001 Inventory $450 / Cr Factory Output $450') },
+      ]
+    },
+    {
+      phase: t('4단계 · 원가 정산 및 결산','Phase 4 · Cost Settlement & Closing'),
+      phaseColor: 'bg-purple-600',
+      items: [
+        { role:'cost', fn:'F17', action: t('SF001 오더 정산 (KO88)','Order Settlement SF001'),
+          detail: t('실제 $827.50 - 표준 $360 = $467.50 불리 차이를 Settlement에 이관','Transfer variance $467.50 Unfav. (Actual $827.50 – Std $360) to settlement'),
+          result: t('Dr 생산정산차이 $467.50 / Cr FactoryOutput $467.50','Dr Production Variance $467.50 / Cr Factory Output $467.50') },
+        { role:'cost', fn:'F18', action: t('FG001 오더 정산 (KO88)','Order Settlement FG001'),
+          detail: t('실제 $420 - 표준 $450 = -$30 유리 차이 정산','Settle favorable variance -$30 (Actual $420 – Std $450)'),
+          result: t('Dr FactoryOutput $30 / Cr 생산정산차이 $30','Dr Factory Output $30 / Cr Production Variance $30') },
+        { role:'cost', fn:'F19', action: t('Activity 단가 재평가 (KSS2)','Revalue Activity Prices'),
+          detail: t('실제 코스트센터 발생액으로 단가 재계산, Activity Variance 산출','Recalculate actual rates from cost center actuals, compute Activity Variance'),
+          result: t('코스트센터별 실제단가 확정','Actual activity rates confirmed per cost center') },
+        { role:'cost', fn:'F20', action: t('ML 원가 배부 및 결산전기 (CKMLCP)','ML Cost Allocation & Post Closing'),
+          detail: t('단일레벨(RM001 PPV $50) → 반제품 롤업 → 완성품 다중레벨 롤업 → 결산전기','Single-level (RM001 PPV $50) → SF001 rollup → FG001 multi-level rollup → Post Closing'),
+          result: t('재고·COGS 실제원가 재평가 완료','Inventory & COGS revalued to actual cost') },
+        { role:'cost', fn:'F21', action: t('CO-PA 실제 전기 (KE27)','CO-PA Actual Posting'),
+          detail: t('ML 결산 후 실제원가를 수익성 세그먼트에 반영','Post actual costs to profitability segment after ML closing'),
+          result: t('CO-PA 실제마진 업데이트','CO-PA actual margin updated') },
+      ]
+    },
+    {
+      phase: t('5단계 · 영업 및 수금','Phase 5 · Sales & Collection'),
+      phaseColor: 'bg-orange-600',
+      items: [
+        { role:'sale', fn:'F25', action: t('판매오더 생성 (VA01)','Create Sales Order'),
+          detail: t('Northstar Motors(C001) 주문: FG001 5EA × $150 = $750','Northstar Motors (C001) order: FG001 5EA × $150 = $750'),
+          result: t('SO 생성, FI 전표 없음, CO-PA 수주 기록','SO created, no FI posting, CO-PA order entry') },
+        { role:'sale', fn:'F26', action: t('출하 및 출고 전기 (VL01N)','Outbound Delivery & Post Goods Issue'),
+          detail: t('FG001 5EA 출하, 표준원가 기준 COGS 인식 5EA×$45=$225','Ship FG001 5EA, recognize COGS at std price 5EA×$45=$225'),
+          result: t('Dr COGS $225 / Cr FG001재고 $225','Dr COGS $225 / Cr FG001 Inventory $225') },
+        { role:'sale', fn:'F27', action: t('청구서 발행 (VF01)','Customer Billing'),
+          detail: t('청구 전기: 5EA×$150=$750 매출 인식, CO-PA 수익 전기','Billing post: recognize revenue 5EA×$150=$750, update CO-PA'),
+          result: t('Dr 매출채권 AR $750 / Cr 매출액 $750','Dr Accounts Receivable $750 / Cr Revenue $750') },
+        { role:'fin',  fn:'F28', action: t('대금 수취 (F-28)','Incoming Payment'),
+          detail: t('Northstar Motors로부터 $750 입금 처리 완료','Receive $750 from Northstar Motors, clear AR'),
+          result: t('Dr 현금 $750 / Cr 매출채권 AR $750 (잔액 $0)','Dr Cash $750 / Cr Accounts Receivable $750 (balance $0)') },
+      ]
+    },
+  ];
+
+  const roleMap = Object.fromEntries(ROLES.map(r => [r.id, r]));
+
+  const [expand, setExpand] = React.useState({});
+  const toggle = (key) => setExpand(prev => ({ ...prev, [key]: !prev[key] }));
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 space-y-4">
+      {/* Header */}
+      <div className="bg-slate-800 text-white rounded-xl p-5 shadow-lg">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">{t('회의록 · 비즈니스 시나리오','Meeting Minutes · Business Scenario')}</p>
+            <h2 className="text-xl font-bold">{t('월간 생산원가 관리 시뮬레이션','Monthly Production Cost Management Simulation')}</h2>
+            <p className="text-slate-300 text-sm mt-1">ABC Auto Parts Inc. — P001 Alabama Manufacturing Plant</p>
+          </div>
+          <div className="text-right text-xs text-slate-400 space-y-0.5">
+            <p>{t('제품','Product')}: FG001 Engine Mount Bracket</p>
+            <p>{t('공급사','Vendor')}: V001 Summit Aluminum Supply</p>
+            <p>{t('고객사','Customer')}: C001 Northstar Motors Inc.</p>
+          </div>
+        </div>
+        {/* Attendees */}
+        <div className="mt-4 pt-4 border-t border-slate-600">
+          <p className="text-slate-400 text-xs mb-2">{t('참석자','Attendees')}</p>
+          <div className="flex flex-wrap gap-2">
+            {ROLES.map(r => (
+              <span key={r.id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${r.color}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${r.dot}`}></span>
+                {r.name} · {r.title}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Agenda summary */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">{t('의제 요약','Agenda Summary')}</h3>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {STEPS.map((s, i) => (
+            <span key={i} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-medium">
+              <span className={`w-2 h-2 rounded-full ${s.phaseColor}`}></span>
+              {s.phase}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Steps */}
+      {STEPS.map((phase, pi) => (
+        <div key={pi} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <button
+            className={`w-full flex items-center gap-3 px-5 py-3.5 text-left hover:opacity-90 transition-opacity ${phase.phaseColor} text-white`}
+            onClick={() => toggle(`phase-${pi}`)}
+          >
+            <span className="font-semibold text-sm flex-1">{phase.phase}</span>
+            <span className="text-white/70 text-xs">{phase.items.length}{t('개 단계','steps')}</span>
+            <span className="text-white/80 text-sm">{expand[`phase-${pi}`] === false ? '▶' : '▼'}</span>
+          </button>
+
+          {expand[`phase-${pi}`] !== false && (
+            <div className="divide-y divide-gray-100">
+              {phase.items.map((item, ii) => {
+                const role = roleMap[item.role];
+                return (
+                  <div key={ii} className="px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <span className="text-gray-400 text-xs font-mono mt-0.5 w-8 shrink-0">{item.fn}</span>
+                      <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${role.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${role.dot}`}></span>
+                        {role.name.split('  ')[0]}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">{item.action}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{item.detail}</p>
+                        <p className="text-xs text-slate-400 mt-1 font-mono">{t('→','→')} {item.result}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Sign-off */}
+      <div className="bg-slate-50 rounded-xl border border-gray-200 p-4 text-center text-xs text-slate-400">
+        {t('본 시나리오는 ABC Auto Parts Inc. 교육용 시뮬레이션 자료입니다. 실제 거래 데이터와 무관합니다.',
+           'This scenario is for educational simulation purposes at ABC Auto Parts Inc. Not related to actual transaction data.')}
+      </div>
+    </div>
+  );
+};
+
 const FlowTab = ({ lang }) => {
   const ko = lang === 'ko';
   const t = (k, e) => (ko ? k : e);
@@ -3613,11 +3819,12 @@ function App() {
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
     { id:'flow',    label:'Flow',       icon:'🔀' },
+    { id:'script',  label:lang==='ko'?'시나리오':'Script', icon:'📝' },
     { id:'copa',    label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
   ];
 
   const TAB_GROUPS = [
-    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['flow','dryrun'] },
+    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['flow','dryrun','script'] },
     { id:'grp_params',   label:'Intro',    icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
@@ -3738,6 +3945,7 @@ function App() {
         {activeTab==='ledger' && <LedgerTab mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} ckSteps={ckSteps} materials={materials} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}
+        {activeTab==='script' && <ScriptTab lang={lang} />}
         {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
       </main>
 

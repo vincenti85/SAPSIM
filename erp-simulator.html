@@ -1731,6 +1731,62 @@ function parseCSV(text) {
   return rows;
 }
 
+const PARAM_COLS = {
+  mm: ['MatCode','Qty','POPrice','StdPrice','Vendor'],
+  pp: ['OutCode','OutQty','ScrapPct','Components','LaborHr','LaborRate','MachineHr','MachineRate','OHRate'],
+  sd: ['MatCode','Qty','SalesPrice','Customer'],
+};
+
+function parseParamCSV(text, kind) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) throw new Error(`${kind.toUpperCase()} CSV is empty`);
+  const header = lines[0].split(',').map(h => h.trim());
+  const missing = PARAM_COLS[kind].filter(c => !header.includes(c));
+  if (missing.length) throw new Error(`Missing columns: ${missing.join(', ')}`);
+
+  return lines.slice(1).map((line, i) => {
+    const vals = line.split(',').map(v => v.trim());
+    const row = {};
+    header.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+    if (kind === 'mm') {
+      const qty     = parseFloat(row.Qty);
+      const poPrice = parseFloat(row.POPrice);
+      const stdPrice = parseFloat(row.StdPrice);
+      if (isNaN(qty) || isNaN(poPrice) || isNaN(stdPrice))
+        throw new Error(`Row ${i+2}: Qty, POPrice, StdPrice must be numbers`);
+      return { matCode:row.MatCode, qty, poPrice, stdPrice, vendor:row.Vendor || 'V001' };
+    }
+
+    if (kind === 'pp') {
+      const outQty   = parseFloat(row.OutQty);
+      const scrapPct = parseFloat(row.ScrapPct);
+      const laborHr  = parseFloat(row.LaborHr);
+      const laborRate = parseFloat(row.LaborRate);
+      const machineHr = parseFloat(row.MachineHr);
+      const machineRate = parseFloat(row.MachineRate);
+      const ohRate   = parseFloat(row.OHRate);
+      if ([outQty, scrapPct, laborHr, laborRate, machineHr, machineRate, ohRate].some(isNaN))
+        throw new Error(`Row ${i+2}: numeric columns must be numbers`);
+      const components = (row.Components || '').split(';').filter(Boolean).map(pair => {
+        const [code, qty] = pair.split(':');
+        return { code: (code||'').trim(), consumQty: parseFloat(qty) || 0 };
+      });
+      return { outCode:row.OutCode, outQty, scrapPct, components, laborHr, laborRate, machineHr, machineRate, ohRate };
+    }
+
+    if (kind === 'sd') {
+      const qty = parseFloat(row.Qty);
+      const salesPrice = parseFloat(row.SalesPrice);
+      if (isNaN(qty) || isNaN(salesPrice))
+        throw new Error(`Row ${i+2}: Qty, SalesPrice must be numbers`);
+      return { matCode:row.MatCode, qty, salesPrice, customer:row.Customer || 'C001' };
+    }
+
+    throw new Error(`Unknown kind: ${kind}`);
+  });
+}
+
 /* =========================================================================
    INVENTORY TABLE
    ========================================================================= */

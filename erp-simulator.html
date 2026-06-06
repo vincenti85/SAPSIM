@@ -3407,7 +3407,7 @@ function App() {
       { outCode:'FG001', outQty:10, components:[{code:'SF001',consumQty:10},{code:'RM001',consumQty:5}] };
 
     const rm001Std = mm0.stdPrice;
-    const rm002Std = 3.20;
+    const rm002Std = parseFloat((materials.find(m => m.MaterialCode === 'RM002') || {StandardPrice:'3.20'}).StandardPrice);
     const sf001Std = parseFloat((materials.find(m => m.MaterialCode === 'SF001') || {StandardPrice:'18.00'}).StandardPrice);
     const fg001Std = parseFloat((materials.find(m => m.MaterialCode === 'FG001') || {StandardPrice:'45.00'}).StandardPrice);
 

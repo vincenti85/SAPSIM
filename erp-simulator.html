@@ -3085,17 +3085,23 @@ function App() {
 
   /* ---- MM derived data ---- */
   const mmInv = useMemo(() => {
-    const roh001Qty = mmSteps.migo_gr ? 100 : 0;
-    const roh001Amt = mmSteps.migo_gr ? 550 : 0;
-    return [{ code:'RM001', uom:'KG', qty:roh001Qty, amt:roh001Amt }];
-  }, [mmSteps]);
-  const priceVar = mmSteps.migo_gr ? 50 : 0;
+    const mm0 = simParams.mm[0] || { matCode:'RM001', qty:100, stdPrice:5.50, poPrice:5.00, vendor:'V001' };
+    const qty = mmSteps.migo_gr ? mm0.qty : 0;
+    const amt = mmSteps.migo_gr ? +(mm0.qty * mm0.stdPrice).toFixed(2) : 0;
+    return [{ code:mm0.matCode, uom:'KG', qty, amt }];
+  }, [mmSteps, simParams]);
+  const priceVar = useMemo(() => {
+    const mm0 = simParams.mm[0] || { qty:100, stdPrice:5.50, poPrice:5.00 };
+    return mmSteps.migo_gr ? +(mm0.qty * (mm0.stdPrice - mm0.poPrice)).toFixed(2) : 0;
+  }, [mmSteps, simParams]);
   const apBalance = useMemo(() => {
+    const mm0 = simParams.mm[0] || { qty:100, poPrice:5.00 };
+    const inv = +(mm0.qty * mm0.poPrice).toFixed(2);
     let bal = 0;
-    if (mmSteps.miro) bal += 500;
-    if (mmSteps.f53) bal -= 500;
+    if (mmSteps.miro) bal += inv;
+    if (mmSteps.f53)  bal -= inv;
     return bal;
-  }, [mmSteps]);
+  }, [mmSteps, simParams]);
 
   /* ---- PP derived data (linked to MM stock) ---- */
   const roh001FromMM = mmSteps.migo_gr ? 100 : 0;

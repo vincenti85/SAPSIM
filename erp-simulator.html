@@ -440,444 +440,494 @@ const T = {
 };
 
 /* =========================================================================
-   JOURNAL DATA (KO/EN per T-code) — used by JournalPopup via lang toggle
+   JOURNAL DATA (KO/EN per T-code) — built dynamically from simParams
    ========================================================================= */
-const JOURNAL_DATA = {
+function stdOf(mats, code) {
+  const m = mats.find(r => r.MaterialCode === code);
+  return m ? parseFloat(m.StandardPrice) : 0;
+}
 
-  /* ── Master/BOM ── */
-  kp26: {
-    ko: { tcode:'KP26', title:'액티비티 단가 계획', lines:[
-      { account:'CC001 노무비: $20.00/h (계획)' },
-      { account:'CC001 기계비: $30.00/h (계획)' },
-      { account:'CC002 노무비: $25.00/h (계획)' },
-      { account:'CC002 기계비: $40.00/h (계획)' },
-    ], note:'코스트센터별 액티비티 단가를 계획합니다. 표준원가 계산의 기초가 됩니다.' },
-    en: { tcode:'KP26', title:'Plan Activity Rates', lines:[
-      { account:'CC001 Labor: $20.00/h (plan)' },
-      { account:'CC001 Machine: $30.00/h (plan)' },
-      { account:'CC002 Labor: $25.00/h (plan)' },
-      { account:'CC002 Machine: $40.00/h (plan)' },
-    ], note:'Plan activity rates per cost center. This is the basis for standard cost calculation.' },
-  },
-  ck11n_h: {
-    ko: { tcode:'CK11N', title:'SF001 표준원가 계산', lines:[
-      { account:'재료비: RM001 3KG × $5.50 = $16.50' },
-      { account:'재료비: RM002 1KG × $3.20 = $3.20' },
-      { account:'노무비: CC001 1.0h × $20 = $20.00' },
-      { account:'기계비: CC001 0.5h × $30 = $15.00' },
-      { account:'합계(계산가): $54.70' },
-    ], note:'현재 표준가 $18.00 vs 계산가 $54.70 → CK24로 릴리즈 시 표준가 갱신' },
-    en: { tcode:'CK11N', title:'Calculate SF001 Standard Cost', lines:[
-      { account:'Material: RM001 3KG × $5.50 = $16.50' },
-      { account:'Material: RM002 1KG × $3.20 = $3.20' },
-      { account:'Labor: CC001 1.0h × $20 = $20.00' },
-      { account:'Machine: CC001 0.5h × $30 = $15.00' },
-      { account:'Total (calculated): $54.70' },
-    ], note:'Current std price $18.00 vs calculated $54.70 → Release the standard cost to update standard price.' },
-  },
-  ck24_h: {
-    ko: { tcode:'CK24', title:'SF001 표준원가 릴리즈', lines:[
-      { type:'Dr', account:'완제품/반제품 재고 재평가', amount:'계산가 기반' },
-      { type:'Cr', account:'재고재평가손익', amount:'차이분' },
-    ], note:'SF001 표준가를 $18.00 → $54.70으로 업데이트. 실제 운영에서는 연초 1회 실행.' },
-    en: { tcode:'CK24', title:'Release SF001 Standard Cost', lines:[
-      { type:'Dr', account:'Inventory Revaluation (Semi-Finished)', amount:'Based on calc. price' },
-      { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:'Difference' },
-    ], note:'Update SF001 standard price $18.00 → $54.70. In production, run once at fiscal year start.' },
-  },
-  ck11n_f: {
-    ko: { tcode:'CK11N', title:'FG001 표준원가 계산', lines:[
-      { account:'반제품: SF001 1EA × $54.70 = $54.70 (릴리즈 후 새 표준가)' },
-      { account:'재료비: RM001 0.5KG × $5.50 = $2.75' },
-      { account:'노무비: CC002 0.5h × $25 = $12.50' },
-      { account:'기계비: CC002 0.25h × $40 = $10.00' },
-      { account:'합계(계산가): $79.95' },
-    ], note:'하위 레벨(SF001) 표준원가 릴리즈 후 상위 레벨(FG001) 계산. 반드시 순서를 지켜야 합니다.' },
-    en: { tcode:'CK11N', title:'Calculate FG001 Standard Cost', lines:[
-      { account:'Semi-finished: SF001 1EA × $54.70 = $54.70 (new std after release)' },
-      { account:'Material: RM001 0.5KG × $5.50 = $2.75' },
-      { account:'Labor: CC002 0.5h × $25 = $12.50' },
-      { account:'Machine: CC002 0.25h × $40 = $10.00' },
-      { account:'Total (calculated): $79.95' },
-    ], note:'Calculate upper-level (FG001) after releasing lower-level (SF001) standard cost. Order is mandatory.' },
-  },
-  ck24_f: {
-    ko: { tcode:'CK24', title:'FG001 표준원가 릴리즈', lines:[
-      { type:'Dr', account:'완제품 재고 재평가', amount:'계산가 기반' },
-      { type:'Cr', account:'재고재평가손익', amount:'차이분' },
-    ], note:'FG001 표준가를 $45.00 → $79.95으로 업데이트. 이후 모든 생산/판매 거래에 새 표준가 적용.' },
-    en: { tcode:'CK24', title:'Release FG001 Standard Cost', lines:[
-      { type:'Dr', account:'Finished Goods Inventory Revaluation', amount:'Based on calc. price' },
-      { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:'Difference' },
-    ], note:'Update FG001 standard price $45.00 → $79.95. New standard price applies to all subsequent production and sales.' },
-  },
+function buildJournals(p, mats, lang) {
+  // ── MM helpers ──
+  const mm = p.mm[0] || { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' };
+  const mmQty        = mm.qty;
+  const mmStd        = mm.stdPrice;
+  const mmPO         = mm.poPrice;
+  const mmInventory  = +(mmQty * mmStd).toFixed(2);
+  const mmGRIR       = +(mmQty * mmPO).toFixed(2);
+  const mmPPV        = +(mmQty * (mmStd - mmPO)).toFixed(2);
+  const mmVendor     = mm.vendor || 'V001';
 
-  /* ── MM Purchase ── */
-  me21n: {
-    ko: { tcode:'ME21N', title:'구매오더 생성', lines:[
-      { account:'Commitment 기록만 (예산약정)' }
-    ], note:'PO 생성: 분개 없음, Commitment 기록만' },
-    en: { tcode:'ME21N', title:'Create Purchase Order', lines:[
-      { account:'Commitment record only (budget commitment)' }
-    ], note:'PO created: no journal entry, Commitment record only.' },
-  },
-  migo_gr: {
-    ko: { tcode:'MIGO', title:'입고 (Goods Receipt 101)', lines:[
-      { type:'Dr', account:'원재료 RM001 (재고)', amount:550 },
-      { type:'Cr', account:'GR/IR (입고미착)', amount:500 },
-      { type:'Cr', account:'구매가격차이 (PPV, 유리)', amount:50 },
-    ], note:'100KG × $5.50 표준가로 재고 평가. 발주가 $5.00 → $50 유리 차이' },
-    en: { tcode:'MIGO', title:'Goods Receipt (Movement 101)', lines:[
-      { type:'Dr', account:'Raw Material RM001 (Inventory)', amount:550 },
-      { type:'Cr', account:'GR/IR Clearing', amount:500 },
-      { type:'Cr', account:'Purchase Price Variance (PPV, Favorable)', amount:50 },
-    ], note:'100KG × $5.50 std price. PO price $5.00 → $50 favorable variance.' },
-  },
-  miro: {
-    ko: { tcode:'MIRO', title:'송장 검증 (Invoice Receipt)', lines:[
-      { type:'Dr', account:'GR/IR (입고미착)', amount:500 },
-      { type:'Cr', account:'외상매입금 AP-V001', amount:500 },
-    ], note:'송장 금액 $500 (발주가 기준)' },
-    en: { tcode:'MIRO', title:'Invoice Verification', lines:[
-      { type:'Dr', account:'GR/IR Clearing', amount:500 },
-      { type:'Cr', account:'Accounts Payable AP-V001', amount:500 },
-    ], note:'Invoice amount $500 (based on PO price).' },
-  },
-  f53: {
-    ko: { tcode:'F-53', title:'대금 지급', lines:[
-      { type:'Dr', account:'외상매입금 AP-V001', amount:500 },
-      { type:'Cr', account:'현금 Cash', amount:500 },
-    ], note:'Vendor 지급 완료' },
-    en: { tcode:'F-53', title:'Vendor Payment', lines:[
-      { type:'Dr', account:'Accounts Payable AP-V001', amount:500 },
-      { type:'Cr', account:'Cash / Bank', amount:500 },
-    ], note:'Vendor payment completed.' },
-  },
-  me21n_ret: {
-    ko: { tcode:'ME21N', title:'반품 PO 생성', lines:[
-      { account:'반품 PO: RM001 20KG 반품 예정' }
-    ], note:'이동유형 122를 사용하여 공급업체에 자재를 반환합니다.' },
-    en: { tcode:'ME21N', title:'Create Return PO', lines:[
-      { account:'Return PO: RM001 20KG scheduled for return' }
-    ], note:'Use movement type 122 to return materials to vendor.' },
-  },
-  migo_ret: {
-    ko: { tcode:'MIGO', title:'공급업체 반품 (122)', lines:[
-      { type:'Cr', account:'원재료 RM001 (20KG × $5.50)', amount:110 },
-      { type:'Dr', account:'GR/IR (환급 예정)', amount:100 },
-      { type:'Dr', account:'구매가격차이 (PPV)', amount:10 },
-    ], note:'이동유형 122: 입고(101)의 반대 처리. 재고 감소, GRIR 재생성.' },
-    en: { tcode:'MIGO', title:'Vendor Return (Movement 122)', lines:[
-      { type:'Cr', account:'Raw Material RM001 (20KG × $5.50)', amount:110 },
-      { type:'Dr', account:'GR/IR Clearing (credit expected)', amount:100 },
-      { type:'Dr', account:'Purchase Price Variance (PPV)', amount:10 },
-    ], note:'Movement 122: Reversal of GR (101). Inventory decreases, GRIR re-created.' },
-  },
-  mi01: {
-    ko: { tcode:'MI01', title:'실사문서 생성', lines:[
-      { account:'실사문서 생성: 실사일자 기준 재고 잠금' }
-    ], note:'실사 기간 동안 해당 자재의 입출고가 제한됩니다.' },
-    en: { tcode:'MI01', title:'Create Inventory Document', lines:[
-      { account:'Inventory document created: stock locked as of count date' }
-    ], note:'Goods movements for this material are restricted during the inventory count period.' },
-  },
-  mi04: {
-    ko: { tcode:'MI04', title:'실사 수량 입력', lines:[
-      { account:'장부수량: 100 KG / 실사수량: 98 KG / 차이: -2 KG' }
-    ], note:'실사 수량과 장부 수량 차이를 기록합니다.' },
-    en: { tcode:'MI04', title:'Enter Inventory Count', lines:[
-      { account:'Book qty: 100 KG / Counted qty: 98 KG / Difference: -2 KG' }
-    ], note:'Record the difference between physical count and book quantity.' },
-  },
-  mi07: {
-    ko: { tcode:'MI07', title:'실사 차이 전기', lines:[
-      { type:'Dr', account:'재고감모손실 (Inventory Loss)', amount:11 },
-      { type:'Cr', account:'원재료 RM001 (2KG × $5.50)', amount:11 },
-    ], note:'장부 vs 실물 차이 2KG × $5.50 = $11 감모손실 계상.' },
-    en: { tcode:'MI07', title:'Post Inventory Difference', lines:[
-      { type:'Dr', account:'Inventory Loss (Shortage)', amount:11 },
-      { type:'Cr', account:'Raw Material RM001 (2KG × $5.50)', amount:11 },
-    ], note:'2KG × $5.50 = $11 inventory loss posted for book vs. physical difference.' },
-  },
+  // ── PP helpers ──
+  const ppH = p.pp.find(o => o.outCode === 'SF001') || p.pp[0] ||
+    { outCode:'SF001', outQty:20, components:[], laborHr:20, laborRate:14.675, machineHr:10, machineRate:14.00, ohRate:0 };
+  const ppF = p.pp.find(o => o.outCode === 'FG001') || p.pp[1] ||
+    { outCode:'FG001', outQty:10, components:[], laborHr:5, laborRate:25, machineHr:2.5, machineRate:35, ohRate:0 };
 
-  /* ── PP Production ── */
-  co01_h: {
-    ko: { tcode:'CO01', title:'생산오더 생성 SF001', lines:[{ account:'오더 생성 (계획)' }], note:'생산오더 생성, 분개 없음' },
-    en: { tcode:'CO01', title:'Create Production Order SF001', lines:[{ account:'Order created (planned)' }], note:'Production order created, no journal entry.' },
-  },
-  gi_h: {
-    ko: { tcode:'MIGO', title:'원재료 출고 (261) → WIP', lines:[
-      { type:'Dr', account:'WIP 재공품 (자재투입)', amount:394 },
-      { type:'Cr', account:'원재료 RM001 (60KG×$5.50)', amount:330 },
-      { type:'Cr', account:'원재료 RM002 (20KG×$3.20)', amount:64 },
-    ], note:'BOM 표준 소요량 기준 출고: RM001 60KG + RM002 20KG = $394' },
-    en: { tcode:'MIGO', title:'Goods Issue (261) → WIP', lines:[
-      { type:'Dr', account:'WIP (material input)', amount:394 },
-      { type:'Cr', account:'Raw Material RM001 (60KG×$5.50)', amount:330 },
-      { type:'Cr', account:'Raw Material RM002 (20KG×$3.20)', amount:64 },
-    ], note:'Issue per BOM standard qty: RM001 60KG + RM002 20KG = $394.' },
-  },
-  co11n_h: {
-    ko: { tcode:'CO11N', title:'생산 확정 (Confirmation)', lines:[
-      { type:'Dr', account:'WIP 재공품 (활동투입)', amount:433.50 },
-      { type:'Cr', account:'Activity 노무비 (CC001 20h×$14.675)', amount:293.50 },
-      { type:'Cr', account:'Activity 기계비 (CC001 10h×$14.00)', amount:140 },
-    ], note:'자재 $394 + 활동 $433.50 = 실제 $827.50 → 표준 $360 → 차이 $467.50 불리(오더정산)' },
-    en: { tcode:'CO11N', title:'Production Confirmation', lines:[
-      { type:'Dr', account:'WIP (activity input)', amount:433.50 },
-      { type:'Cr', account:'Activity Labor (CC001 20h×$14.675)', amount:293.50 },
-      { type:'Cr', account:'Activity Machine (CC001 10h×$14.00)', amount:140 },
-    ], note:'Material $394 + Activity $433.50 = Actual $827.50 → Std $360 → Variance $467.50 Unfavorable (order settlement).' },
-  },
-  gr_h: {
-    ko: { tcode:'MIGO', title:'반제품 입고 (101)', lines:[
-      { type:'Dr', account:'반제품 SF001 (20EA×$18)', amount:360 },
-      { type:'Cr', account:'생산완성대체 (FactoryOutput)', amount:360 },
-    ], note:'표준가 $18.00 × 20EA = $360 입고' },
-    en: { tcode:'MIGO', title:'Semi-Finished GR (Movement 101)', lines:[
-      { type:'Dr', account:'Semi-Finished SF001 (20EA×$18)', amount:360 },
-      { type:'Cr', account:'Factory Output (GBB/AUF)', amount:360 },
-    ], note:'Standard price $18.00 × 20EA = $360 received into stock.' },
-  },
-  co01_f: {
-    ko: { tcode:'CO01', title:'생산오더 생성 FG001', lines:[{ account:'오더 생성 (계획)' }], note:'생산오더 생성, 분개 없음' },
-    en: { tcode:'CO01', title:'Create Production Order FG001', lines:[{ account:'Order created (planned)' }], note:'Production order created, no journal entry.' },
-  },
-  gi_f: {
-    ko: { tcode:'MIGO', title:'반제품/원재료 출고 (261) → WIP', lines:[
-      { type:'Dr', account:'WIP 재공품 (재공품)', amount:207.50 },
-      { type:'Cr', account:'반제품 SF001 (10EA×$18)', amount:180 },
-      { type:'Cr', account:'원재료 RM001 (5KG×$5.50)', amount:27.50 },
-    ], note:'완성품 BOM 투입: SF001 10 + RM001 5KG' },
-    en: { tcode:'MIGO', title:'Issue Semi-Finished/Raw Materials (261) → WIP', lines:[
-      { type:'Dr', account:'WIP', amount:207.50 },
-      { type:'Cr', account:'Semi-Finished SF001 (10EA×$18)', amount:180 },
-      { type:'Cr', account:'Raw Material RM001 (5KG×$5.50)', amount:27.50 },
-    ], note:'Finished goods BOM input: SF001 10EA + RM001 5KG.' },
-  },
-  co11n_f: {
-    ko: { tcode:'CO11N', title:'완성품 확정 (Confirmation)', lines:[
-      { type:'Dr', account:'WIP 재공품 (활동투입)', amount:212.50 },
-      { type:'Cr', account:'Activity 노무비 (CC002 5h×$25)', amount:125 },
-      { type:'Cr', account:'Activity 기계비 (CC002 2.5h×$35)', amount:87.50 },
-    ], note:'자재 $207.50 + 활동 $212.50 = 실제 $420 → 표준 $450 → 차이 -$30 유리(오더정산)' },
-    en: { tcode:'CO11N', title:'Finished Goods Production Confirmation', lines:[
-      { type:'Dr', account:'WIP (activity input)', amount:212.50 },
-      { type:'Cr', account:'Activity Labor (CC002 5h×$25)', amount:125 },
-      { type:'Cr', account:'Activity Machine (CC002 2.5h×$35)', amount:87.50 },
-    ], note:'Material $207.50 + Activity $212.50 = Actual $420 → Std $450 → Variance -$30 Favorable (order settlement).' },
-  },
-  gr_f: {
-    ko: { tcode:'MIGO', title:'완성품 입고 (101)', lines:[
-      { type:'Dr', account:'완제품 FG001 (10EA×$45)', amount:450 },
-      { type:'Cr', account:'생산완성대체 (FactoryOutput)', amount:450 },
-    ], note:'표준가 $45.00 × 10EA = $450 입고' },
-    en: { tcode:'MIGO', title:'Finished Goods GR (Movement 101)', lines:[
-      { type:'Dr', account:'Finished Goods FG001 (10EA×$45)', amount:450 },
-      { type:'Cr', account:'Factory Output (GBB/AUF)', amount:450 },
-    ], note:'Standard price $45.00 × 10EA = $450 received into stock.' },
-  },
-  ko88_h: {
-    ko: { tcode:'KO88', title:'오더 정산 SF001', lines:[
-      { type:'Dr', account:'생산정산차이 (불리)', amount:467.50 },
-      { type:'Cr', account:'생산완성대체', amount:467.50 },
-    ], note:'실제 $827.50 (자재$394 + 활동$433.50) - 표준 $360 = $467.50 불리(Unfavorable)' },
-    en: { tcode:'KO88', title:'Order Settlement SF001', lines:[
-      { type:'Dr', account:'Production Settlement Variance (Unfavorable)', amount:467.50 },
-      { type:'Cr', account:'Factory Output (GBB/AUF)', amount:467.50 },
-    ], note:'Actual $827.50 (material $394 + activity $433.50) - Std $360 = $467.50 Unfavorable.' },
-  },
-  ko88_f: {
-    ko: { tcode:'KO88', title:'오더 정산 FG001', lines:[
-      { type:'Dr', account:'생산완성대체', amount:30 },
-      { type:'Cr', account:'생산정산차이 (유리)', amount:30 },
-    ], note:'실제 $420 (자재$207.50 + 활동$212.50) - 표준 $450 = -$30 유리(Favorable)' },
-    en: { tcode:'KO88', title:'Order Settlement FG001', lines:[
-      { type:'Dr', account:'Factory Output (GBB/AUF)', amount:30 },
-      { type:'Cr', account:'Production Settlement Variance (Favorable)', amount:30 },
-    ], note:'Actual $420 (material $207.50 + activity $212.50) - Std $450 = -$30 Favorable.' },
-  },
+  const hCompLines = (ppH.components || []).map(c => {
+    const std = stdOf(mats, c.code);
+    return { code:c.code, qty:c.consumQty, std, amt:+(c.consumQty * std).toFixed(2) };
+  });
+  const hGI = hCompLines.reduce((s, c) => s + c.amt, 0);
 
-  /* ── FI/CO ── */
-  kss2: {
-    ko: { tcode:'KSS2', title:'Activity 단가 재평가', lines:[
-      { account:'CC001 노무비 실제: $22/h (계획 $20/h)' },
-      { account:'CC001 기계비 실제: $28/h (계획 $30/h)' },
-      { account:'CC002 노무비 실제: $51/h (계획 $25/h)' },
-    ], note:'코스트센터 실제 발생액 기준 실제단가 계산. 계획단가와의 차이가 Activity Variance 발생.' },
-    en: { tcode:'KSS2', title:'Revalue Activity Prices', lines:[
-      { account:'CC001 Labor actual: $22/h (plan $20/h)' },
-      { account:'CC001 Machine actual: $28/h (plan $30/h)' },
-      { account:'CC002 Labor actual: $51/h (plan $25/h)' },
-    ], note:'Calculate actual activity rates based on cost center actual costs. Difference from plan = Activity Rate Variance.' },
-  },
-  sl_roh: {
-    ko: { tcode:'CKMLCP', title:'원자재 단일레벨 ML 배부', lines:[
-      { account:'RM001 총 차이: -$50 (유리)' },
-      { account:'재고분 배부: -$17.50 (35KG)' },
-      { account:'소비분 배부: -$32.50 (65KG → SF001 롤업)' },
-    ], note:'단일레벨: 해당 자재의 차이를 재고/소비 수량 비율로 배부' },
-    en: { tcode:'CKMLCP', title:'Raw Material Single-Level ML Allocation', lines:[
-      { account:'RM001 total variance: -$50 (Favorable)' },
-      { account:'Inventory allocation: -$17.50 (35KG remaining)' },
-      { account:'Consumption allocation: -$32.50 (65KG → rolled up to SF001)' },
-    ], note:'Single-level: Allocate variance to inventory/consumption based on qty ratio.' },
-  },
-  sl_halb: {
-    ko: { tcode:'CKMLCP', title:'반제품 단일레벨 ML 배부', lines:[
-      { account:'SF001 생산정산차이: +$467.50' },
-      { account:'RM001 소비분 롤업: -$32.50' },
-      { account:'순차이: $467.50 - $32.50 = $435.00 → 배부' },
-      { account:'재고분(10EA): +$217.50 / 소비분(10EA): +$217.50' },
-    ], note:'단일레벨 후 소비분 $217.50이 FG001 다중레벨 롤업 대상' },
-    en: { tcode:'CKMLCP', title:'Semi-Finished Single-Level ML Allocation', lines:[
-      { account:'SF001 production variance: +$467.50' },
-      { account:'RM001 consumption rollup: -$32.50' },
-      { account:'Net variance: $467.50 - $32.50 = $435.00 → allocated' },
-      { account:'Inventory (10EA): +$217.50 / Consumption (10EA): +$217.50' },
-    ], note:'Consumption portion $217.50 is subject to FG001 multi-level rollup.' },
-  },
-  ml: {
-    ko: { tcode:'CKMLCP', title:'완성품 다중레벨 롤업', lines:[
-      { account:'SF001 소비분 이전: +$217.50' },
-      { account:'FG001 자체 차이: -$30.00' },
-      { account:'총 차이: $217.50 - $30.00 = +$187.50' },
-      { account:'재고분(5EA): +$93.75 / 소비분(5EA): +$93.75' },
-    ], note:'반제품 소비 차이가 완성품 원가에 롤업됨 → 멀티레벨 ML의 핵심' },
-    en: { tcode:'CKMLCP', title:'Finished Goods Multi-Level Rollup', lines:[
-      { account:'SF001 consumption transferred: +$217.50' },
-      { account:'FG001 own variance: -$30.00' },
-      { account:'Net variance: $217.50 - $30.00 = +$187.50' },
-      { account:'Inventory (5EA): +$93.75 / Consumption (5EA): +$93.75' },
-    ], note:'Semi-finished consumption variance rolled up to finished goods cost — the key of multi-level ML.' },
-  },
-  ml_pc: {
-    ko: { tcode:'CKMLCP', title:'결산전기 (Post Closing)', lines:[
-      { type:'Dr', account:'완제품 FG001 (재고분)', amount:93.75 },
-      { type:'Cr', account:'ML차이계정', amount:93.75 },
-      { type:'Dr', account:'매출원가 (소비분)', amount:93.75 },
-      { type:'Cr', account:'ML차이계정', amount:93.75 },
-    ], note:'재고/소비 모두 실제원가로 재평가. 결산전기 후 해당 기간 재오픈 불가.' },
-    en: { tcode:'CKMLCP', title:'Post Closing', lines:[
-      { type:'Dr', account:'Finished Goods FG001 (inventory portion)', amount:93.75 },
-      { type:'Cr', account:'ML Difference Account', amount:93.75 },
-      { type:'Dr', account:'Cost of Goods Sold (consumption portion)', amount:93.75 },
-      { type:'Cr', account:'ML Difference Account', amount:93.75 },
-    ], note:'Both inventory and COGS revalued to actual cost. Period cannot be reopened after post closing.' },
-  },
-  ke27: {
-    ko: { tcode:'KE27', title:'CO-PA 실제전기', lines:[
-      { account:'매출원가 표준 $225 → 실제 $318.75 재평가' },
-      { account:'CO-PA 수익성 세그먼트 업데이트' },
-    ], note:'ML 결산 후 실제원가를 CO-PA에 반영. 수익성 분석에 실제마진 표시.' },
-    en: { tcode:'KE27', title:'CO-PA Actual Posting', lines:[
-      { account:'COGS revalued: Standard $225 → Actual $318.75' },
-      { account:'CO-PA profitability segment updated' },
-    ], note:'Post actual costs to CO-PA after ML settlement. Profitability analysis shows actual margin.' },
-  },
-  mr21: {
-    ko: { tcode:'MR21', title:'자재 표준원가 재평가', lines:[
-      { type:'Dr', account:'반제품 SF001 (재고재평가)', amount:233.75 },
-      { type:'Cr', account:'재고재평가손익 (Inventory Revaluation)', amount:233.75 },
-    ], note:'SF001 재고 10EA를 구 표준가($18)에서 신 표준가($41.375)로 재평가. 차이 $233.75 계상.' },
-    en: { tcode:'MR21', title:'Material Standard Cost Revaluation', lines:[
-      { type:'Dr', account:'Semi-Finished SF001 (revaluation)', amount:233.75 },
-      { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:233.75 },
-    ], note:'Revalue SF001 inventory 10EA from old std price ($18) to new std price ($41.375). Difference $233.75 posted.' },
-  },
+  const hLabor   = +(ppH.laborHr   * ppH.laborRate  ).toFixed(2);
+  const hMachine = +(ppH.machineHr * ppH.machineRate ).toFixed(2);
+  const hOH      = +((hLabor + hMachine) * (ppH.ohRate / 100)).toFixed(2);
+  const hActivity = +(hLabor + hMachine + hOH).toFixed(2);
 
-  /* ── SD Sales ── */
-  va01: {
-    ko: { tcode:'VA01', title:'판매오더 생성', lines:[{ account:'SO 생성: 분개 없음' }], note:'판매오더 생성. FI 전표 없음, CO-PA에 수주 기록.' },
-    en: { tcode:'VA01', title:'Create Sales Order', lines:[{ account:'SO created: no journal entry' }], note:'Sales order created. No FI posting. Order recorded in CO-PA.' },
-  },
-  vl01n: {
-    ko: { tcode:'VL01N', title:'출하 (Goods Issue)', lines:[
-      { type:'Dr', account:'매출원가 COGS (5EA×$45)', amount:225 },
-      { type:'Cr', account:'완제품 FG001', amount:225 },
-    ], note:'출하 전기(PGI): 재고 감소, 표준원가 기준 매출원가 인식' },
-    en: { tcode:'VL01N', title:'Outbound Delivery (Goods Issue)', lines:[
-      { type:'Dr', account:'Cost of Goods Sold (5EA×$45)', amount:225 },
-      { type:'Cr', account:'Finished Goods FG001', amount:225 },
-    ], note:'Post Goods Issue (PGI): Inventory decreases, COGS recognized at standard price.' },
-  },
-  vf01: {
-    ko: { tcode:'VF01', title:'청구 (Billing / Invoice)', lines:[
-      { type:'Dr', account:'매출채권 AR (5EA×$150)', amount:750 },
-      { type:'Cr', account:'매출액 Revenue', amount:750 },
-    ], note:'청구 전기: 매출액 인식, CO-PA에 수익 전기' },
-    en: { tcode:'VF01', title:'Billing (Customer Invoice)', lines:[
-      { type:'Dr', account:'Accounts Receivable AR (5EA×$150)', amount:750 },
-      { type:'Cr', account:'Sales Revenue', amount:750 },
-    ], note:'Billing posted: revenue recognized, revenue posted to CO-PA.' },
-  },
-  f28: {
-    ko: { tcode:'F-28', title:'대금 수취', lines:[
-      { type:'Dr', account:'현금 Cash', amount:750 },
-      { type:'Cr', account:'매출채권 AR', amount:750 },
-    ], note:'고객 대금 수취 완료. AR 잔액 $0.' },
-    en: { tcode:'F-28', title:'Incoming Payment', lines:[
-      { type:'Dr', account:'Cash / Bank', amount:750 },
-      { type:'Cr', account:'Accounts Receivable AR', amount:750 },
-    ], note:'Customer payment received. AR balance $0.' },
-  },
-  va01_ret: {
-    ko: { tcode:'VA01', title:'반품 Sales Order', lines:[{ account:'반품 SO 생성: FG001 2EA 반품 예정' }], note:'오더유형 RE(반품)으로 생성. 기준 청구서 번호 참조.' },
-    en: { tcode:'VA01', title:'Create Return Sales Order', lines:[{ account:'Return SO created: FG001 2EA scheduled for return' }], note:'Created with order type RE (return). References original billing document.' },
-  },
-  vl01n_ret: {
-    ko: { tcode:'VL01N', title:'반품 입고 처리', lines:[
-      { type:'Dr', account:'완제품 FG001 (2EA×$45)', amount:90 },
-      { type:'Cr', account:'반품매출원가 (대체)', amount:90 },
-    ], note:'고객에서 자재 반입. 표준원가 기준 재고 증가.' },
-    en: { tcode:'VL01N', title:'Returns Delivery (Goods Receipt)', lines:[
-      { type:'Dr', account:'Finished Goods FG001 (2EA×$45)', amount:90 },
-      { type:'Cr', account:'Returns COGS Reversal', amount:90 },
-    ], note:'Material received from customer. Inventory increases at standard price.' },
-  },
-  vf01_ret: {
-    ko: { tcode:'VF01', title:'대변메모 (Credit Memo)', lines:[
-      { type:'Dr', account:'매출액 (환입)', amount:300 },
-      { type:'Cr', account:'매출채권 AR (감소)', amount:300 },
-    ], note:'고객에게 반품 금액 $300 (2EA×$150) 환급. 매출 취소 처리.' },
-    en: { tcode:'VF01', title:'Credit Memo', lines:[
-      { type:'Dr', account:'Sales Revenue (reversal)', amount:300 },
-      { type:'Cr', account:'Accounts Receivable AR (decrease)', amount:300 },
-    ], note:'Credit $300 (2EA×$150) issued to customer. Revenue reversed.' },
-  },
+  const hStd = stdOf(mats, 'SF001');
+  const hGRamt = +(ppH.outQty * hStd).toFixed(2);
+  const hActual = +(hGI + hActivity).toFixed(2);
+  const hVariance = +(hActual - hGRamt).toFixed(2);
 
-  /* ── Subsequent Debit (후속 차변) ── */
-  miro_sd: {
-    ko: { tcode:'MIRO', title:'후속 차변 (Subsequent Debit)', lines:[
-      { type:'Dr', account:'구매가격차이 PRD (추가운임)', amount:30 },
-      { type:'Cr', account:'AP-V001 매입채무', amount:30 },
-    ], note:'표준가(S) 관리 자재는 후속 차변이 PRD(구매가격차이) 계정으로 처리됨. ML 결산 시 재고/소비에 배부.' },
-    en: { tcode:'MIRO', title:'Subsequent Debit', lines:[
-      { type:'Dr', account:'Price Difference PRD (additional freight)', amount:30 },
-      { type:'Cr', account:'AP-V001 Accounts Payable', amount:30 },
-    ], note:'For standard price (S) materials, subsequent debit posts to PRD (Price Difference). Allocated to stock/consumption in ML closing.' },
-  },
-  miro_sd2: {
-    ko: { tcode:'MIRO', title:'후속 차변 — 관세 추가 (Subsequent Debit)', lines:[
-      { type:'Dr', account:'구매가격차이 PRD (수입관세)', amount:15 },
-      { type:'Cr', account:'미지급금 (관세청)', amount:15 },
-    ], note:'수입 관세 추가 부과. 원자재 표준가와의 차이는 PRD 계정으로 처리.' },
-    en: { tcode:'MIRO', title:'Subsequent Debit — Additional Duty', lines:[
-      { type:'Dr', account:'Price Difference PRD (import duty)', amount:15 },
-      { type:'Cr', account:'Accrued Liabilities (Customs)', amount:15 },
-    ], note:'Additional import duty charged. Difference from material standard price posted to PRD account.' },
-  },
-  f53_sd: {
-    ko: { tcode:'F-53', title:'후속 차변 추가 비용 지급', lines:[
-      { type:'Dr', account:'AP-V001 매입채무', amount:30 },
-      { type:'Cr', account:'현금/은행', amount:30 },
-    ], note:'추가 운임 $30 지급 완료. AP 잔액 $0.' },
-    en: { tcode:'F-53', title:'Payment of Subsequent Debit', lines:[
-      { type:'Dr', account:'AP-V001 Accounts Payable', amount:30 },
-      { type:'Cr', account:'Cash/Bank', amount:30 },
-    ], note:'Additional freight $30 paid. AP balance $0.' },
-  },
-};
+  const fCompLines = (ppF.components || []).map(c => {
+    const std = stdOf(mats, c.code);
+    return { code:c.code, qty:c.consumQty, std, amt:+(c.consumQty * std).toFixed(2) };
+  });
+  const fGI = fCompLines.reduce((s, c) => s + c.amt, 0);
+
+  const fLabor   = +(ppF.laborHr   * ppF.laborRate  ).toFixed(2);
+  const fMachine = +(ppF.machineHr * ppF.machineRate ).toFixed(2);
+  const fOH      = +((fLabor + fMachine) * (ppF.ohRate / 100)).toFixed(2);
+  const fActivity = +(fLabor + fMachine + fOH).toFixed(2);
+
+  const fStd = stdOf(mats, 'FG001');
+  const fGRamt = +(ppF.outQty * fStd).toFixed(2);
+  const fActual   = +(fGI + fActivity).toFixed(2);
+  const fVariance = +(fActual - fGRamt).toFixed(2);
+
+  // ── SD helpers ──
+  const sd = p.sd[0] || { matCode:'FG001', qty:5, salesPrice:150, customer:'C001' };
+  const sdQty   = sd.qty;
+  const sdPrice = sd.salesPrice;
+  const sdCOGSu = stdOf(mats, sd.matCode) || fStd;
+  const sdCOGS  = +(sdQty * sdPrice).toFixed(2);
+  const sdRev   = +(sdQty * sdPrice).toFixed(2);
+  const sdCust  = sd.customer || 'C001';
+
+  return {
+
+    kp26: {
+      ko: { tcode:'KP26', title:'액티비티 단가 계획', lines:[
+        { account:`CC001 노무비: $${ppH.laborRate.toFixed(2)}/h (계획)` },
+        { account:`CC001 기계비: $${ppH.machineRate.toFixed(2)}/h (계획)` },
+        { account:`CC002 노무비: $${ppF.laborRate.toFixed(2)}/h (계획)` },
+        { account:`CC002 기계비: $${ppF.machineRate.toFixed(2)}/h (계획)` },
+      ], note:'코스트센터별 액티비티 단가를 계획합니다. 표준원가 계산의 기초가 됩니다.' },
+      en: { tcode:'KP26', title:'Plan Activity Rates', lines:[
+        { account:`CC001 Labor: $${ppH.laborRate.toFixed(2)}/h (plan)` },
+        { account:`CC001 Machine: $${ppH.machineRate.toFixed(2)}/h (plan)` },
+        { account:`CC002 Labor: $${ppF.laborRate.toFixed(2)}/h (plan)` },
+        { account:`CC002 Machine: $${ppF.machineRate.toFixed(2)}/h (plan)` },
+      ], note:'Plan activity rates per cost center. This is the basis for standard cost calculation.' },
+    },
+    ck11n_h: {
+      ko: { tcode:'CK11N', title:'SF001 표준원가 계산', lines:[
+        ...hCompLines.map(c => ({ account:`재료비: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        { account:`노무비: CC001 ${ppH.laborHr}h × $${ppH.laborRate}/h = $${hLabor.toFixed(2)}` },
+        { account:`기계비: CC001 ${ppH.machineHr}h × $${ppH.machineRate}/h = $${hMachine.toFixed(2)}` },
+        { account:`합계(계산가): $${(+hGI + hActivity).toFixed(2)}` },
+      ], note:`현재 표준가 $${hStd.toFixed(2)} vs 계산가 $${(hGI + hActivity).toFixed(2)}` },
+      en: { tcode:'CK11N', title:'Calculate SF001 Standard Cost', lines:[
+        ...hCompLines.map(c => ({ account:`Material: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        { account:`Labor: CC001 ${ppH.laborHr}h × $${ppH.laborRate}/h = $${hLabor.toFixed(2)}` },
+        { account:`Machine: CC001 ${ppH.machineHr}h × $${ppH.machineRate}/h = $${hMachine.toFixed(2)}` },
+        { account:`Total (calculated): $${(hGI + hActivity).toFixed(2)}` },
+      ], note:`Current std price $${hStd.toFixed(2)} vs calculated $${(hGI + hActivity).toFixed(2)}` },
+    },
+    ck24_h: {
+      ko: { tcode:'CK24', title:'SF001 표준원가 릴리즈', lines:[
+        { type:'Dr', account:'완제품/반제품 재고 재평가', amount:'계산가 기반' },
+        { type:'Cr', account:'재고재평가손익', amount:'차이분' },
+      ], note:`SF001 표준가를 $${hStd.toFixed(2)} → $${(hGI + hActivity).toFixed(2)}으로 업데이트.` },
+      en: { tcode:'CK24', title:'Release SF001 Standard Cost', lines:[
+        { type:'Dr', account:'Inventory Revaluation (Semi-Finished)', amount:'Based on calc. price' },
+        { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:'Difference' },
+      ], note:`Update SF001 standard price $${hStd.toFixed(2)} → $${(hGI + hActivity).toFixed(2)}.` },
+    },
+    ck11n_f: {
+      ko: { tcode:'CK11N', title:'FG001 표준원가 계산', lines:[
+        ...fCompLines.map(c => ({ account:`재료비: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        { account:`노무비: CC002 ${ppF.laborHr}h × $${ppF.laborRate}/h = $${fLabor.toFixed(2)}` },
+        { account:`기계비: CC002 ${ppF.machineHr}h × $${ppF.machineRate}/h = $${fMachine.toFixed(2)}` },
+        { account:`합계(계산가): $${(fGI + fActivity).toFixed(2)}` },
+      ], note:'하위 레벨(SF001) 표준원가 릴리즈 후 상위 레벨(FG001) 계산.' },
+      en: { tcode:'CK11N', title:'Calculate FG001 Standard Cost', lines:[
+        ...fCompLines.map(c => ({ account:`Material: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        { account:`Labor: CC002 ${ppF.laborHr}h × $${ppF.laborRate}/h = $${fLabor.toFixed(2)}` },
+        { account:`Machine: CC002 ${ppF.machineHr}h × $${ppF.machineRate}/h = $${fMachine.toFixed(2)}` },
+        { account:`Total (calculated): $${(fGI + fActivity).toFixed(2)}` },
+      ], note:'Calculate upper-level (FG001) after releasing lower-level (SF001) standard cost.' },
+    },
+    ck24_f: {
+      ko: { tcode:'CK24', title:'FG001 표준원가 릴리즈', lines:[
+        { type:'Dr', account:'완제품 재고 재평가', amount:'계산가 기반' },
+        { type:'Cr', account:'재고재평가손익', amount:'차이분' },
+      ], note:`FG001 표준가를 $${fStd.toFixed(2)} → $${(fGI + fActivity).toFixed(2)}으로 업데이트.` },
+      en: { tcode:'CK24', title:'Release FG001 Standard Cost', lines:[
+        { type:'Dr', account:'Finished Goods Inventory Revaluation', amount:'Based on calc. price' },
+        { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:'Difference' },
+      ], note:`Update FG001 standard price $${fStd.toFixed(2)} → $${(fGI + fActivity).toFixed(2)}.` },
+    },
+
+    me21n: {
+      ko: { tcode:'ME21N', title:'구매오더 생성', lines:[
+        { account:`${mm.matCode} ${mmQty}KG × $${mmPO.toFixed(2)}/KG = $${mmGRIR.toFixed(2)} PO 금액` },
+      ], note:'PO 생성: 분개 없음, Commitment 기록만' },
+      en: { tcode:'ME21N', title:'Create Purchase Order', lines:[
+        { account:`${mm.matCode} ${mmQty}KG × $${mmPO.toFixed(2)}/KG = $${mmGRIR.toFixed(2)} PO value` },
+      ], note:'PO created: no journal entry, Commitment record only.' },
+    },
+    migo_gr: {
+      ko: { tcode:'MIGO', title:'입고 (Goods Receipt 101)', lines:[
+        { type:'Dr', account:`원재료 ${mm.matCode} (재고)`, amount:mmInventory },
+        { type:'Cr', account:'GR/IR (입고미착)', amount:mmGRIR },
+        ...(mmPPV !== 0 ? [{ type:'Cr', account:`구매가격차이 (PPV, ${mmPPV > 0 ? '유리' : '불리'})`, amount:Math.abs(mmPPV) }] : []),
+      ], note:`${mmQty}KG × $${mmStd.toFixed(2)} 표준가로 재고 평가. 발주가 $${mmPO.toFixed(2)} → $${Math.abs(mmPPV).toFixed(2)} ${mmPPV >= 0 ? '유리' : '불리'} 차이` },
+      en: { tcode:'MIGO', title:'Goods Receipt (Movement 101)', lines:[
+        { type:'Dr', account:`Raw Material ${mm.matCode} (Inventory)`, amount:mmInventory },
+        { type:'Cr', account:'GR/IR Clearing', amount:mmGRIR },
+        ...(mmPPV !== 0 ? [{ type:'Cr', account:`Purchase Price Variance (PPV, ${mmPPV >= 0 ? 'Favorable' : 'Unfavorable'})`, amount:Math.abs(mmPPV) }] : []),
+      ], note:`${mmQty}KG × $${mmStd.toFixed(2)} std price. PO price $${mmPO.toFixed(2)} → $${Math.abs(mmPPV).toFixed(2)} ${mmPPV >= 0 ? 'favorable' : 'unfavorable'} variance.` },
+    },
+    miro: {
+      ko: { tcode:'MIRO', title:'송장 검증 (Invoice Receipt)', lines:[
+        { type:'Dr', account:'GR/IR (입고미착)', amount:mmGRIR },
+        { type:'Cr', account:`외상매입금 AP-${mmVendor}`, amount:mmGRIR },
+      ], note:`송장 금액 $${mmGRIR.toFixed(2)} (발주가 기준)` },
+      en: { tcode:'MIRO', title:'Invoice Verification', lines:[
+        { type:'Dr', account:'GR/IR Clearing', amount:mmGRIR },
+        { type:'Cr', account:`Accounts Payable AP-${mmVendor}`, amount:mmGRIR },
+      ], note:`Invoice amount $${mmGRIR.toFixed(2)} (based on PO price).` },
+    },
+    f53: {
+      ko: { tcode:'F-53', title:'대금 지급', lines:[
+        { type:'Dr', account:`외상매입금 AP-${mmVendor}`, amount:mmGRIR },
+        { type:'Cr', account:'현금 Cash', amount:mmGRIR },
+      ], note:'Vendor 지급 완료' },
+      en: { tcode:'F-53', title:'Vendor Payment', lines:[
+        { type:'Dr', account:`Accounts Payable AP-${mmVendor}`, amount:mmGRIR },
+        { type:'Cr', account:'Cash / Bank', amount:mmGRIR },
+      ], note:'Vendor payment completed.' },
+    },
+    me21n_ret: {
+      ko: { tcode:'ME21N', title:'반품 PO 생성', lines:[
+        { account:`반품 PO: ${mm.matCode} 20KG 반품 예정` }
+      ], note:'이동유형 122를 사용하여 공급업체에 자재를 반환합니다.' },
+      en: { tcode:'ME21N', title:'Create Return PO', lines:[
+        { account:`Return PO: ${mm.matCode} 20KG scheduled for return` }
+      ], note:'Use movement type 122 to return materials to vendor.' },
+    },
+    migo_ret: {
+      ko: { tcode:'MIGO', title:'공급업체 반품 (122)', lines:[
+        { type:'Cr', account:`원재료 ${mm.matCode} (20KG × $${mmStd.toFixed(2)})`, amount:+(20*mmStd).toFixed(2) },
+        { type:'Dr', account:'GR/IR (환급 예정)', amount:+(20*mmPO).toFixed(2) },
+        { type:'Dr', account:'구매가격차이 (PPV)', amount:+(20*(mmStd-mmPO)).toFixed(2) },
+      ], note:'이동유형 122: 입고(101)의 반대 처리. 재고 감소, GRIR 재생성.' },
+      en: { tcode:'MIGO', title:'Vendor Return (Movement 122)', lines:[
+        { type:'Cr', account:`Raw Material ${mm.matCode} (20KG × $${mmStd.toFixed(2)})`, amount:+(20*mmStd).toFixed(2) },
+        { type:'Dr', account:'GR/IR Clearing (credit expected)', amount:+(20*mmPO).toFixed(2) },
+        { type:'Dr', account:'Purchase Price Variance (PPV)', amount:+(20*(mmStd-mmPO)).toFixed(2) },
+      ], note:'Movement 122: Reversal of GR (101). Inventory decreases, GRIR re-created.' },
+    },
+    mi01: {
+      ko: { tcode:'MI01', title:'실사문서 생성', lines:[
+        { account:'실사문서 생성: 실사일자 기준 재고 잠금' }
+      ], note:'실사 기간 동안 해당 자재의 입출고가 제한됩니다.' },
+      en: { tcode:'MI01', title:'Create Inventory Document', lines:[
+        { account:'Inventory document created: stock locked as of count date' }
+      ], note:'Goods movements for this material are restricted during the inventory count period.' },
+    },
+    mi04: {
+      ko: { tcode:'MI04', title:'실사 수량 입력', lines:[
+        { account:`장부수량: ${mmQty} KG / 실사수량: ${mmQty-2} KG / 차이: -2 KG` }
+      ], note:'실사 수량과 장부 수량 차이를 기록합니다.' },
+      en: { tcode:'MI04', title:'Enter Inventory Count', lines:[
+        { account:`Book qty: ${mmQty} KG / Counted qty: ${mmQty-2} KG / Difference: -2 KG` }
+      ], note:'Record the difference between physical count and book quantity.' },
+    },
+    mi07: {
+      ko: { tcode:'MI07', title:'실사 차이 전기', lines:[
+        { type:'Dr', account:'재고감모손실 (Inventory Loss)', amount:+(2*mmStd).toFixed(2) },
+        { type:'Cr', account:`원재료 ${mm.matCode} (2KG × $${mmStd.toFixed(2)})`, amount:+(2*mmStd).toFixed(2) },
+      ], note:`장부 vs 실물 차이 2KG × $${mmStd.toFixed(2)} = $${(2*mmStd).toFixed(2)} 감모손실 계상.` },
+      en: { tcode:'MI07', title:'Post Inventory Difference', lines:[
+        { type:'Dr', account:'Inventory Loss (Shortage)', amount:+(2*mmStd).toFixed(2) },
+        { type:'Cr', account:`Raw Material ${mm.matCode} (2KG × $${mmStd.toFixed(2)})`, amount:+(2*mmStd).toFixed(2) },
+      ], note:`2KG × $${mmStd.toFixed(2)} = $${(2*mmStd).toFixed(2)} inventory loss posted for book vs. physical difference.` },
+    },
+
+    co01_h: {
+      ko: { tcode:'CO01', title:'생산오더 생성 SF001', lines:[{ account:'오더 생성 (계획)' }], note:'생산오더 생성, 분개 없음' },
+      en: { tcode:'CO01', title:'Create Production Order SF001', lines:[{ account:'Order created (planned)' }], note:'Production order created, no journal entry.' },
+    },
+    gi_h: {
+      ko: { tcode:'MIGO', title:'원재료 출고 (261) → WIP', lines:[
+        { type:'Dr', account:'WIP 재공품 (자재투입)', amount:hGI },
+        ...hCompLines.map(c => ({ type:'Cr', account:`원재료 ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+      ], note:`BOM 표준 소요량 기준 출고: $${hGI.toFixed(2)}` },
+      en: { tcode:'MIGO', title:'Goods Issue (261) → WIP', lines:[
+        { type:'Dr', account:'WIP (material input)', amount:hGI },
+        ...hCompLines.map(c => ({ type:'Cr', account:`Raw Material ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+      ], note:`Issue per BOM standard qty: total $${hGI.toFixed(2)}.` },
+    },
+    co11n_h: {
+      ko: { tcode:'CO11N', title:'생산 확정 (Confirmation)', lines:[
+        { type:'Dr', account:'WIP 재공품 (활동투입)', amount:hActivity },
+        { type:'Cr', account:`Activity 노무비 (CC001 ${ppH.laborHr}h×$${ppH.laborRate})`, amount:hLabor },
+        { type:'Cr', account:`Activity 기계비 (CC001 ${ppH.machineHr}h×$${ppH.machineRate})`, amount:hMachine },
+      ], note:`자재 $${hGI.toFixed(2)} + 활동 $${hActivity.toFixed(2)} = 실제 $${hActual.toFixed(2)} → 표준 $${hGRamt.toFixed(2)} → 차이 $${hVariance.toFixed(2)} ${hVariance > 0 ? '불리' : '유리'}` },
+      en: { tcode:'CO11N', title:'Production Confirmation', lines:[
+        { type:'Dr', account:'WIP (activity input)', amount:hActivity },
+        { type:'Cr', account:`Activity Labor (CC001 ${ppH.laborHr}h×$${ppH.laborRate})`, amount:hLabor },
+        { type:'Cr', account:`Activity Machine (CC001 ${ppH.machineHr}h×$${ppH.machineRate})`, amount:hMachine },
+      ], note:`Material $${hGI.toFixed(2)} + Activity $${hActivity.toFixed(2)} = Actual $${hActual.toFixed(2)} → Std $${hGRamt.toFixed(2)} → Variance $${hVariance.toFixed(2)} ${hVariance > 0 ? 'Unfavorable' : 'Favorable'}.` },
+    },
+    gr_h: {
+      ko: { tcode:'MIGO', title:'반제품 입고 (101)', lines:[
+        { type:'Dr', account:`반제품 SF001 (${ppH.outQty}EA×$${hStd.toFixed(2)})`, amount:hGRamt },
+        { type:'Cr', account:'생산완성대체 (FactoryOutput)', amount:hGRamt },
+      ], note:`표준가 $${hStd.toFixed(2)} × ${ppH.outQty}EA = $${hGRamt.toFixed(2)} 입고` },
+      en: { tcode:'MIGO', title:'Semi-Finished GR (Movement 101)', lines:[
+        { type:'Dr', account:`Semi-Finished SF001 (${ppH.outQty}EA×$${hStd.toFixed(2)})`, amount:hGRamt },
+        { type:'Cr', account:'Factory Output (GBB/AUF)', amount:hGRamt },
+      ], note:`Standard price $${hStd.toFixed(2)} × ${ppH.outQty}EA = $${hGRamt.toFixed(2)} received into stock.` },
+    },
+    co01_f: {
+      ko: { tcode:'CO01', title:'생산오더 생성 FG001', lines:[{ account:'오더 생성 (계획)' }], note:'생산오더 생성, 분개 없음' },
+      en: { tcode:'CO01', title:'Create Production Order FG001', lines:[{ account:'Order created (planned)' }], note:'Production order created, no journal entry.' },
+    },
+    gi_f: {
+      ko: { tcode:'MIGO', title:'반제품/원재료 출고 (261) → WIP', lines:[
+        { type:'Dr', account:'WIP 재공품 (재공품)', amount:fGI },
+        ...fCompLines.map(c => ({ type:'Cr', account:`${c.code.startsWith('S')?'반제품':'원재료'} ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+      ], note:`완성품 BOM 투입: $${fGI.toFixed(2)}` },
+      en: { tcode:'MIGO', title:'Issue Semi-Finished/Raw Materials (261) → WIP', lines:[
+        { type:'Dr', account:'WIP', amount:fGI },
+        ...fCompLines.map(c => ({ type:'Cr', account:`${c.code.startsWith('S')?'Semi-Finished':'Raw Material'} ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+      ], note:`Finished goods BOM input: total $${fGI.toFixed(2)}.` },
+    },
+    co11n_f: {
+      ko: { tcode:'CO11N', title:'완성품 확정 (Confirmation)', lines:[
+        { type:'Dr', account:'WIP 재공품 (활동투입)', amount:fActivity },
+        { type:'Cr', account:`Activity 노무비 (CC002 ${ppF.laborHr}h×$${ppF.laborRate})`, amount:fLabor },
+        { type:'Cr', account:`Activity 기계비 (CC002 ${ppF.machineHr}h×$${ppF.machineRate})`, amount:fMachine },
+      ], note:`자재 $${fGI.toFixed(2)} + 활동 $${fActivity.toFixed(2)} = 실제 $${fActual.toFixed(2)} → 표준 $${fGRamt.toFixed(2)} → 차이 $${fVariance.toFixed(2)} ${fVariance > 0 ? '불리' : '유리'}` },
+      en: { tcode:'CO11N', title:'Finished Goods Production Confirmation', lines:[
+        { type:'Dr', account:'WIP (activity input)', amount:fActivity },
+        { type:'Cr', account:`Activity Labor (CC002 ${ppF.laborHr}h×$${ppF.laborRate})`, amount:fLabor },
+        { type:'Cr', account:`Activity Machine (CC002 ${ppF.machineHr}h×$${ppF.machineRate})`, amount:fMachine },
+      ], note:`Material $${fGI.toFixed(2)} + Activity $${fActivity.toFixed(2)} = Actual $${fActual.toFixed(2)} → Std $${fGRamt.toFixed(2)} → Variance $${fVariance.toFixed(2)} ${fVariance > 0 ? 'Unfavorable' : 'Favorable'}.` },
+    },
+    gr_f: {
+      ko: { tcode:'MIGO', title:'완성품 입고 (101)', lines:[
+        { type:'Dr', account:`완제품 FG001 (${ppF.outQty}EA×$${fStd.toFixed(2)})`, amount:fGRamt },
+        { type:'Cr', account:'생산완성대체 (FactoryOutput)', amount:fGRamt },
+      ], note:`표준가 $${fStd.toFixed(2)} × ${ppF.outQty}EA = $${fGRamt.toFixed(2)} 입고` },
+      en: { tcode:'MIGO', title:'Finished Goods GR (Movement 101)', lines:[
+        { type:'Dr', account:`Finished Goods FG001 (${ppF.outQty}EA×$${fStd.toFixed(2)})`, amount:fGRamt },
+        { type:'Cr', account:'Factory Output (GBB/AUF)', amount:fGRamt },
+      ], note:`Standard price $${fStd.toFixed(2)} × ${ppF.outQty}EA = $${fGRamt.toFixed(2)} received into stock.` },
+    },
+    ko88_h: {
+      ko: { tcode:'KO88', title:'오더 정산 SF001', lines:[
+        { type:'Dr', account:`생산정산차이 (${hVariance > 0 ? '불리' : '유리'})`, amount:Math.abs(hVariance) },
+        { type:'Cr', account:'생산완성대체', amount:Math.abs(hVariance) },
+      ], note:`실제 $${hActual.toFixed(2)} - 표준 $${hGRamt.toFixed(2)} = $${hVariance.toFixed(2)} ${hVariance > 0 ? '불리(Unfavorable)' : '유리(Favorable)'}` },
+      en: { tcode:'KO88', title:'Order Settlement SF001', lines:[
+        { type:'Dr', account:`Production Settlement Variance (${hVariance > 0 ? 'Unfavorable' : 'Favorable'})`, amount:Math.abs(hVariance) },
+        { type:'Cr', account:'Factory Output (GBB/AUF)', amount:Math.abs(hVariance) },
+      ], note:`Actual $${hActual.toFixed(2)} - Std $${hGRamt.toFixed(2)} = $${hVariance.toFixed(2)} ${hVariance > 0 ? 'Unfavorable' : 'Favorable'}.` },
+    },
+    ko88_f: {
+      ko: { tcode:'KO88', title:'오더 정산 FG001', lines:[
+        { type:'Dr', account:'생산완성대체', amount:Math.abs(fVariance) },
+        { type:'Cr', account:`생산정산차이 (${fVariance < 0 ? '유리' : '불리'})`, amount:Math.abs(fVariance) },
+      ], note:`실제 $${fActual.toFixed(2)} - 표준 $${fGRamt.toFixed(2)} = $${fVariance.toFixed(2)} ${fVariance < 0 ? '유리(Favorable)' : '불리(Unfavorable)'}` },
+      en: { tcode:'KO88', title:'Order Settlement FG001', lines:[
+        { type:'Dr', account:'Factory Output (GBB/AUF)', amount:Math.abs(fVariance) },
+        { type:'Cr', account:`Production Settlement Variance (${fVariance < 0 ? 'Favorable' : 'Unfavorable'})`, amount:Math.abs(fVariance) },
+      ], note:`Actual $${fActual.toFixed(2)} - Std $${fGRamt.toFixed(2)} = $${fVariance.toFixed(2)} ${fVariance < 0 ? 'Favorable' : 'Unfavorable'}.` },
+    },
+
+    kss2: {
+      ko: { tcode:'KSS2', title:'Activity 단가 재평가', lines:[
+        { account:`CC001 노무비 실제: $${ppH.laborRate}/h (계획 $${ppH.laborRate}/h)` },
+        { account:`CC001 기계비 실제: $${ppH.machineRate}/h (계획 $${ppH.machineRate}/h)` },
+        { account:`CC002 노무비 실제: $${ppF.laborRate}/h (계획 $${ppF.laborRate}/h)` },
+      ], note:'코스트센터 실제 발생액 기준 실제단가 계산.' },
+      en: { tcode:'KSS2', title:'Revalue Activity Prices', lines:[
+        { account:`CC001 Labor actual: $${ppH.laborRate}/h (plan $${ppH.laborRate}/h)` },
+        { account:`CC001 Machine actual: $${ppH.machineRate}/h (plan $${ppH.machineRate}/h)` },
+        { account:`CC002 Labor actual: $${ppF.laborRate}/h (plan $${ppF.laborRate}/h)` },
+      ], note:'Calculate actual activity rates based on cost center actual costs.' },
+    },
+    sl_roh: {
+      ko: { tcode:'CKMLCP', title:'원자재 단일레벨 ML 배부', lines:[
+        { account:`RM001 총 차이: $${(-mmPPV).toFixed(2)} (${mmPPV >= 0 ? '유리' : '불리'})` },
+        { account:`재고분 배부: $${(-(mmPPV*0.35)).toFixed(2)} (35KG)` },
+        { account:`소비분 배부: $${(-(mmPPV*0.65)).toFixed(2)} (65KG → SF001 롤업)` },
+      ], note:'단일레벨: 해당 자재의 차이를 재고/소비 수량 비율로 배부' },
+      en: { tcode:'CKMLCP', title:'Raw Material Single-Level ML Allocation', lines:[
+        { account:`RM001 total variance: $${(-mmPPV).toFixed(2)} (${mmPPV >= 0 ? 'Favorable' : 'Unfavorable'})` },
+        { account:`Inventory allocation: $${(-(mmPPV*0.35)).toFixed(2)} (35KG remaining)` },
+        { account:`Consumption allocation: $${(-(mmPPV*0.65)).toFixed(2)} (65KG → rolled up to SF001)` },
+      ], note:'Single-level: Allocate variance to inventory/consumption based on qty ratio.' },
+    },
+    sl_halb: {
+      ko: { tcode:'CKMLCP', title:'반제품 단일레벨 ML 배부', lines:[
+        { account:`SF001 생산정산차이: $${hVariance.toFixed(2)}` },
+        { account:`RM001 소비분 롤업: $${(-(mmPPV*0.65)).toFixed(2)}` },
+        { account:`순차이: $${(hVariance - mmPPV*0.65).toFixed(2)} → 배부` },
+        { account:`재고분(${ppH.outQty/2}EA): $${((hVariance - mmPPV*0.65)/2).toFixed(2)} / 소비분(${ppH.outQty/2}EA): $${((hVariance - mmPPV*0.65)/2).toFixed(2)}` },
+      ], note:'단일레벨 후 소비분이 FG001 다중레벨 롤업 대상' },
+      en: { tcode:'CKMLCP', title:'Semi-Finished Single-Level ML Allocation', lines:[
+        { account:`SF001 production variance: $${hVariance.toFixed(2)}` },
+        { account:`RM001 consumption rollup: $${(-(mmPPV*0.65)).toFixed(2)}` },
+        { account:`Net variance: $${(hVariance - mmPPV*0.65).toFixed(2)} → allocated` },
+        { account:`Inventory (${ppH.outQty/2}EA): $${((hVariance - mmPPV*0.65)/2).toFixed(2)} / Consumption (${ppH.outQty/2}EA): $${((hVariance - mmPPV*0.65)/2).toFixed(2)}` },
+      ], note:'Consumption portion is subject to FG001 multi-level rollup.' },
+    },
+    ml: {
+      ko: { tcode:'CKMLCP', title:'완성품 다중레벨 롤업', lines:[
+        { account:`SF001 소비분 이전: $${((hVariance - mmPPV*0.65)/2).toFixed(2)}` },
+        { account:`FG001 자체 차이: $${fVariance.toFixed(2)}` },
+        { account:`총 차이: $${((hVariance - mmPPV*0.65)/2 + fVariance).toFixed(2)}` },
+        { account:`재고분: $${(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2)} / 소비분: $${(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2)}` },
+      ], note:'반제품 소비 차이가 완성품 원가에 롤업됨 → 멀티레벨 ML의 핵심' },
+      en: { tcode:'CKMLCP', title:'Finished Goods Multi-Level Rollup', lines:[
+        { account:`SF001 consumption transferred: $${((hVariance - mmPPV*0.65)/2).toFixed(2)}` },
+        { account:`FG001 own variance: $${fVariance.toFixed(2)}` },
+        { account:`Net variance: $${((hVariance - mmPPV*0.65)/2 + fVariance).toFixed(2)}` },
+        { account:`Inventory: $${(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2)} / Consumption: $${(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2)}` },
+      ], note:'Semi-finished consumption variance rolled up to finished goods cost — the key of multi-level ML.' },
+    },
+    ml_pc: {
+      ko: { tcode:'CKMLCP', title:'결산전기 (Post Closing)', lines:[
+        { type:'Dr', account:'완제품 FG001 (재고분)', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+        { type:'Cr', account:'ML차이계정', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+        { type:'Dr', account:'매출원가 (소비분)', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+        { type:'Cr', account:'ML차이계정', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+      ], note:'재고/소비 모두 실제원가로 재평가.' },
+      en: { tcode:'CKMLCP', title:'Post Closing', lines:[
+        { type:'Dr', account:'Finished Goods FG001 (inventory portion)', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+        { type:'Cr', account:'ML Difference Account', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+        { type:'Dr', account:'Cost of Goods Sold (consumption portion)', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+        { type:'Cr', account:'ML Difference Account', amount:+(((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2) },
+      ], note:'Both inventory and COGS revalued to actual cost.' },
+    },
+    ke27: {
+      ko: { tcode:'KE27', title:'CO-PA 실제전기', lines:[
+        { account:`매출원가 표준 $${sdCOGS.toFixed(2)} → 실제 $${(sdCOGS + ((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2)} 재평가` },
+        { account:'CO-PA 수익성 세그먼트 업데이트' },
+      ], note:'ML 결산 후 실제원가를 CO-PA에 반영.' },
+      en: { tcode:'KE27', title:'CO-PA Actual Posting', lines:[
+        { account:`COGS revalued: Standard $${sdCOGS.toFixed(2)} → Actual $${(sdCOGS + ((hVariance - mmPPV*0.65)/2 + fVariance)/2).toFixed(2)}` },
+        { account:'CO-PA profitability segment updated' },
+      ], note:'Post actual costs to CO-PA after ML settlement.' },
+    },
+    mr21: {
+      ko: { tcode:'MR21', title:'자재 표준원가 재평가', lines:[
+        { type:'Dr', account:'반제품 SF001 (재고재평가)', amount:+(((hGI+hActivity)/ppH.outQty - hStd) * (ppH.outQty - (ppF.components.find(c=>c.code==='SF001')?.consumQty||0))).toFixed(2) },
+        { type:'Cr', account:'재고재평가손익 (Inventory Revaluation)', amount:+(((hGI+hActivity)/ppH.outQty - hStd) * (ppH.outQty - (ppF.components.find(c=>c.code==='SF001')?.consumQty||0))).toFixed(2) },
+      ], note:`SF001 재고를 구 표준가($${hStd.toFixed(2)})에서 신 표준가($${((hGI+hActivity)/ppH.outQty).toFixed(3)})로 재평가.` },
+      en: { tcode:'MR21', title:'Material Standard Cost Revaluation', lines:[
+        { type:'Dr', account:'Semi-Finished SF001 (revaluation)', amount:+(((hGI+hActivity)/ppH.outQty - hStd) * (ppH.outQty - (ppF.components.find(c=>c.code==='SF001')?.consumQty||0))).toFixed(2) },
+        { type:'Cr', account:'Inventory Revaluation Gain/Loss', amount:+(((hGI+hActivity)/ppH.outQty - hStd) * (ppH.outQty - (ppF.components.find(c=>c.code==='SF001')?.consumQty||0))).toFixed(2) },
+      ], note:`Revalue SF001 inventory from old std price ($${hStd.toFixed(2)}) to new std price ($${((hGI+hActivity)/ppH.outQty).toFixed(3)}).` },
+    },
+
+    va01: {
+      ko: { tcode:'VA01', title:'판매오더 생성', lines:[{ account:`SO 생성: ${sd.matCode} ${sdQty}EA × $${sdPrice.toFixed(2)} = $${sdRev.toFixed(2)}` }], note:'판매오더 생성. FI 전표 없음, CO-PA에 수주 기록.' },
+      en: { tcode:'VA01', title:'Create Sales Order', lines:[{ account:`SO created: ${sd.matCode} ${sdQty}EA × $${sdPrice.toFixed(2)} = $${sdRev.toFixed(2)}` }], note:'Sales order created. No FI posting. Order recorded in CO-PA.' },
+    },
+    vl01n: {
+      ko: { tcode:'VL01N', title:'출하 (Goods Issue)', lines:[
+        { type:'Dr', account:`매출원가 COGS (${sdQty}EA×$${sdCOGSu.toFixed(2)})`, amount:sdCOGS },
+        { type:'Cr', account:`완제품 ${sd.matCode}`, amount:sdCOGS },
+      ], note:'출하 전기(PGI): 재고 감소, 표준원가 기준 매출원가 인식' },
+      en: { tcode:'VL01N', title:'Outbound Delivery (Goods Issue)', lines:[
+        { type:'Dr', account:`Cost of Goods Sold (${sdQty}EA×$${sdCOGSu.toFixed(2)})`, amount:sdCOGS },
+        { type:'Cr', account:`Finished Goods ${sd.matCode}`, amount:sdCOGS },
+      ], note:'Post Goods Issue (PGI): Inventory decreases, COGS recognized at standard price.' },
+    },
+    vf01: {
+      ko: { tcode:'VF01', title:'청구 (Billing / Invoice)', lines:[
+        { type:'Dr', account:`매출채권 AR-${sdCust} (${sdQty}EA×$${sdPrice.toFixed(2)})`, amount:sdRev },
+        { type:'Cr', account:'매출액 Revenue', amount:sdRev },
+      ], note:'청구 전기: 매출액 인식, CO-PA에 수익 전기' },
+      en: { tcode:'VF01', title:'Billing (Customer Invoice)', lines:[
+        { type:'Dr', account:`Accounts Receivable AR-${sdCust} (${sdQty}EA×$${sdPrice.toFixed(2)})`, amount:sdRev },
+        { type:'Cr', account:'Sales Revenue', amount:sdRev },
+      ], note:'Billing posted: revenue recognized, revenue posted to CO-PA.' },
+    },
+    f28: {
+      ko: { tcode:'F-28', title:'대금 수취', lines:[
+        { type:'Dr', account:'현금 Cash', amount:sdRev },
+        { type:'Cr', account:`매출채권 AR-${sdCust}`, amount:sdRev },
+      ], note:'고객 대금 수취 완료. AR 잔액 $0.' },
+      en: { tcode:'F-28', title:'Incoming Payment', lines:[
+        { type:'Dr', account:'Cash / Bank', amount:sdRev },
+        { type:'Cr', account:`Accounts Receivable AR-${sdCust}`, amount:sdRev },
+      ], note:'Customer payment received. AR balance $0.' },
+    },
+    va01_ret: {
+      ko: { tcode:'VA01', title:'반품 Sales Order', lines:[{ account:`반품 SO 생성: ${sd.matCode} 2EA 반품 예정` }], note:'오더유형 RE(반품)으로 생성.' },
+      en: { tcode:'VA01', title:'Create Return Sales Order', lines:[{ account:`Return SO created: ${sd.matCode} 2EA scheduled for return` }], note:'Created with order type RE (return).' },
+    },
+    vl01n_ret: {
+      ko: { tcode:'VL01N', title:'반품 입고 처리', lines:[
+        { type:'Dr', account:`완제품 ${sd.matCode} (2EA×$${sdCOGSu.toFixed(2)})`, amount:+(2*sdCOGSu).toFixed(2) },
+        { type:'Cr', account:'반품매출원가 (대체)', amount:+(2*sdCOGSu).toFixed(2) },
+      ], note:'고객에서 자재 반입. 표준원가 기준 재고 증가.' },
+      en: { tcode:'VL01N', title:'Returns Delivery (Goods Receipt)', lines:[
+        { type:'Dr', account:`Finished Goods ${sd.matCode} (2EA×$${sdCOGSu.toFixed(2)})`, amount:+(2*sdCOGSu).toFixed(2) },
+        { type:'Cr', account:'Returns COGS Reversal', amount:+(2*sdCOGSu).toFixed(2) },
+      ], note:'Material received from customer. Inventory increases at standard price.' },
+    },
+    vf01_ret: {
+      ko: { tcode:'VF01', title:'대변메모 (Credit Memo)', lines:[
+        { type:'Dr', account:'매출액 (환입)', amount:+(2*sdPrice).toFixed(2) },
+        { type:'Cr', account:`매출채권 AR-${sdCust} (환급)`, amount:+(2*sdPrice).toFixed(2) },
+      ], note:`반품 2EA × $${sdPrice.toFixed(2)} = $${(2*sdPrice).toFixed(2)} 고객 환급` },
+      en: { tcode:'VF01', title:'Credit Memo', lines:[
+        { type:'Dr', account:'Sales Revenue (return)', amount:+(2*sdPrice).toFixed(2) },
+        { type:'Cr', account:`Accounts Receivable AR-${sdCust} (credit)`, amount:+(2*sdPrice).toFixed(2) },
+      ], note:`Return 2EA × $${sdPrice.toFixed(2)} = $${(2*sdPrice).toFixed(2)} customer credit.` },
+    },
+
+    miro_sd: {
+      ko: { tcode:'MIRO', title:'후속차변: 운임', lines:[
+        { type:'Dr', account:'운임비 (Freight Expense)', amount:30 },
+        { type:'Cr', account:'외상매입금 AP', amount:30 },
+      ], note:'▶ Freight subsequent debit: additional freight charge $30' },
+      en: { tcode:'MIRO', title:'Subsequent Debit: Freight', lines:[
+        { type:'Dr', account:'Freight Expense', amount:30 },
+        { type:'Cr', account:'Accounts Payable', amount:30 },
+      ], note:'▶ Freight subsequent debit: additional freight charge $30' },
+    },
+    miro_sd2: {
+      ko: { tcode:'MIRO', title:'후속차변: 관세', lines:[
+        { type:'Dr', account:'관세 (Import Duty)', amount:15 },
+        { type:'Cr', account:'외상매입금 AP', amount:15 },
+      ], note:'▶ Duty subsequent debit: additional import duty $15' },
+      en: { tcode:'MIRO', title:'Subsequent Debit: Import Duty', lines:[
+        { type:'Dr', account:'Import Duty Expense', amount:15 },
+        { type:'Cr', account:'Accounts Payable', amount:15 },
+      ], note:'▶ Duty subsequent debit: additional import duty $15' },
+    },
+    f53_sd: {
+      ko: { tcode:'F-53', title:'후속차변 지급', lines:[
+        { type:'Dr', account:'외상매입금 AP', amount:45 },
+        { type:'Cr', account:'현금 Cash', amount:45 },
+      ], note:'운임+관세 $45 지급 완료' },
+      en: { tcode:'F-53', title:'Pay Subsequent Debits', lines:[
+        { type:'Dr', account:'Accounts Payable', amount:45 },
+        { type:'Cr', account:'Cash / Bank', amount:45 },
+      ], note:'Freight + duty $45 payment completed.' },
+    },
+  };
+}
 
 /* =========================================================================
    DRYRUN DATA (static E2E reference table — read-only)
@@ -1815,15 +1865,15 @@ const MasterTab = ({ materials, setMaterials, ckSteps, setCkSteps, openPopup, la
             {t.stdCostDesc}
           </p>
           <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="kp26" label={t.btnKP26} color="purple" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.kp26[lang]} />
+            journalData={buildJournals(simParams, materials, lang).kp26[lang]} />
           <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck11n_h" label={t.btnCK11N_H} color="purple" disabled={!ckSteps.kp26} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ck11n_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ck11n_h[lang]} />
           <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck24_h" label={t.btnCK24_H} color="purple" disabled={!ckSteps.ck11n_h} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ck24_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ck24_h[lang]} />
           <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck11n_f" label={t.btnCK11N_F} color="purple" disabled={!ckSteps.ck24_h} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ck11n_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ck11n_f[lang]} />
           <StepButton steps={ckSteps} setSteps={setCkSteps} stepKey="ck24_f" label={t.btnCK24_F} color="purple" disabled={!ckSteps.ck11n_f} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ck24_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ck24_f[lang]} />
         </Card>
       </div>
 
@@ -1904,13 +1954,13 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
             {t.mmScenDesc}
           </p>
           <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="me21n" label={t.btnME21N} color="blue" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.me21n[lang]} />
+            journalData={buildJournals(simParams, materials, lang).me21n[lang]} />
           <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="migo_gr" label={t.btnMIGO_GR} color="blue" disabled={!mmSteps.me21n} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.migo_gr[lang]} />
+            journalData={buildJournals(simParams, materials, lang).migo_gr[lang]} />
           <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="miro" label={t.btnMIRO} color="blue" disabled={!mmSteps.migo_gr} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.miro[lang]} />
+            journalData={buildJournals(simParams, materials, lang).miro[lang]} />
           <StepButton steps={mmSteps} setSteps={setMmSteps} stepKey="f53" label={t.btnF53} color="blue" disabled={!mmSteps.miro} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.f53[lang]} />
+            journalData={buildJournals(simParams, materials, lang).f53[lang]} />
         </Card>
 
         <Card title={t.retTitle}>
@@ -1918,9 +1968,9 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
             {t.retDesc}
           </p>
           <StepButton steps={mmReturnSteps} setSteps={setMmReturnSteps} stepKey="ret_po" label={t.btnRetPO} color="red" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.me21n_ret[lang]} />
+            journalData={buildJournals(simParams, materials, lang).me21n_ret[lang]} />
           <StepButton steps={mmReturnSteps} setSteps={setMmReturnSteps} stepKey="ret_migo" label={t.btnRetMIGO} color="red" disabled={!mmReturnSteps.ret_po} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.migo_ret[lang]} />
+            journalData={buildJournals(simParams, materials, lang).migo_ret[lang]} />
         </Card>
 
         <Card title={t.miTitle}>
@@ -1928,11 +1978,11 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
             {t.miDesc}
           </p>
           <StepButton steps={miSteps} setSteps={setMiSteps} stepKey="mi01" label={t.btnMI01} color="green" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.mi01[lang]} />
+            journalData={buildJournals(simParams, materials, lang).mi01[lang]} />
           <StepButton steps={miSteps} setSteps={setMiSteps} stepKey="mi04" label={t.btnMI04} color="green" disabled={!miSteps.mi01} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.mi04[lang]} />
+            journalData={buildJournals(simParams, materials, lang).mi04[lang]} />
           <StepButton steps={miSteps} setSteps={setMiSteps} stepKey="mi07" label={t.btnMI07} color="green" disabled={!miSteps.mi04} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.mi07[lang]} />
+            journalData={buildJournals(simParams, materials, lang).mi07[lang]} />
         </Card>
 
         {/* ── 후속 차변 시나리오 ── */}
@@ -1944,16 +1994,16 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
           <div className="mb-3">
             <p className="text-xs font-semibold text-amber-700 mb-1.5">{t.sdNote1}</p>
             <StepButton steps={sdebSteps} setSteps={setSdebSteps} stepKey="miro_sd" label={t.btnMiroSD} color="orange" lang={lang} openPopup={openPopup}
-              journalData={JOURNAL_DATA.miro_sd[lang]} />
+              journalData={buildJournals(simParams, materials, lang).miro_sd[lang]} />
             <StepButton steps={sdebSteps} setSteps={setSdebSteps} stepKey="f53_sd" label={t.btnF53SD} color="orange" disabled={!sdebSteps.miro_sd} lang={lang} openPopup={openPopup}
-              journalData={JOURNAL_DATA.f53_sd[lang]} />
+              journalData={buildJournals(simParams, materials, lang).f53_sd[lang]} />
           </div>
 
           {/* 시나리오 2: 관세 후속 차변 (독립 실행 가능) */}
           <div>
             <p className="text-xs font-semibold text-amber-700 mb-1.5">{t.sdNote2}</p>
             <StepButton steps={sdebSteps} setSteps={setSdebSteps} stepKey="miro_sd2" label={t.btnMiroSD2} color="orange" lang={lang} openPopup={openPopup}
-              journalData={JOURNAL_DATA.miro_sd2[lang]} />
+              journalData={buildJournals(simParams, materials, lang).miro_sd2[lang]} />
           </div>
 
           {/* ML 안내 */}
@@ -2014,32 +2064,32 @@ const PPTab = ({ ppSteps, setPpSteps, openPopup, ppInv, wip, ppVar, lang='ko' })
       <div className="lg:col-span-3 space-y-4">
         <Card title={`🏭 ${t.ppPhase1Title}`}>
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co01_h" label={t.btnCO01_H} color="orange" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.co01_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).co01_h[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gi_h" label={t.btnGI_H} color="orange" disabled={!ppSteps.co01_h} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.gi_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).gi_h[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co11n_h" label={t.btnCO11N_H} color="orange" disabled={!ppSteps.gi_h} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.co11n_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).co11n_h[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gr_h" label={t.btnGR_H} color="orange" disabled={!ppSteps.co11n_h} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.gr_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).gr_h[lang]} />
         </Card>
 
         <Card title={`🏭 ${t.ppPhase2Title}`} className={phase1Done?'':'opacity-50'}>
           {!phase1Done && <p className="text-xs text-amber-600 mb-2">{t.ppPhase2Lock}</p>}
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co01_f" label={t.btnCO01_F} color="orange" disabled={!phase1Done} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.co01_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).co01_f[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gi_f" label={t.btnGI_F} color="orange" disabled={!phase1Done} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.gi_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).gi_f[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="co11n_f" label={t.btnCO11N_F} color="orange" disabled={!ppSteps.gi_f} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.co11n_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).co11n_f[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="gr_f" label={t.btnGR_F} color="orange" disabled={!ppSteps.co11n_f} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.gr_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).gr_f[lang]} />
         </Card>
 
         <Card title={t.ppSettleTitle}>
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="ko88_h" label={t.btnKO88_H} color="orange" disabled={!ppSteps.gr_f} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ko88_h[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ko88_h[lang]} />
           <StepButton steps={ppSteps} setSteps={setPpSteps} stepKey="ko88_f" label={t.btnKO88_F} color="orange" disabled={!ppSteps.ko88_h} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ko88_f[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ko88_f[lang]} />
         </Card>
       </div>
 
@@ -2146,17 +2196,17 @@ const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Step
       <div className="lg:col-span-3 space-y-4">
         <Card title={`🧮 ${t.ficoCardTitle}`}>
           <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="kss2" label={t.btnKSS2} color="indigo" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.kss2[lang]} />
+            journalData={buildJournals(simParams, materials, lang).kss2[lang]} />
           <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="sl_roh" label={t.btnSL_ROH} color="indigo" disabled={!ficoSteps.kss2} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.sl_roh[lang]} />
+            journalData={buildJournals(simParams, materials, lang).sl_roh[lang]} />
           <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="sl_halb" label={t.btnSL_HALB} color="indigo" disabled={!ficoSteps.sl_roh} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.sl_halb[lang]} />
+            journalData={buildJournals(simParams, materials, lang).sl_halb[lang]} />
           <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="ml" label={t.btnML} color="indigo" disabled={!ficoSteps.sl_halb} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ml[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ml[lang]} />
           <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="pc" label={t.btnPC} color="indigo" disabled={!ficoSteps.ml} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ml_pc[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ml_pc[lang]} />
           <StepButton steps={ficoSteps} setSteps={setFicoSteps} stepKey="ke27" label={t.btnKE27} color="indigo" disabled={!ficoSteps.pc} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.ke27[lang]} />
+            journalData={buildJournals(simParams, materials, lang).ke27[lang]} />
         </Card>
 
         <Card title={t.mr21CardTitle}>
@@ -2164,7 +2214,7 @@ const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Step
             {t.mr21Desc}
           </p>
           <StepButton steps={mr21Steps} setSteps={setMr21Steps} stepKey="mr21" label={t.btnMR21} color="orange" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.mr21[lang]} />
+            journalData={buildJournals(simParams, materials, lang).mr21[lang]} />
         </Card>
 
         <div className="grid grid-cols-1 gap-4">
@@ -2259,13 +2309,13 @@ const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, fico
             {t.sdScenDesc}
           </p>
           <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="va01" label={t.btnVA01} color="teal" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.va01[lang]} />
+            journalData={buildJournals(simParams, materials, lang).va01[lang]} />
           <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="vl01n" label={t.btnVL01N} color="teal" disabled={!sdSteps.va01} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.vl01n[lang]} />
+            journalData={buildJournals(simParams, materials, lang).vl01n[lang]} />
           <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="vf01" label={t.btnVF01} color="teal" disabled={!sdSteps.vl01n} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.vf01[lang]} />
+            journalData={buildJournals(simParams, materials, lang).vf01[lang]} />
           <StepButton steps={sdSteps} setSteps={setSdSteps} stepKey="f28" label={t.btnF28} color="teal" disabled={!sdSteps.vf01} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.f28[lang]} />
+            journalData={buildJournals(simParams, materials, lang).f28[lang]} />
         </Card>
 
         <Card title={t.plTitle2}>
@@ -2305,11 +2355,11 @@ const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, fico
             {t.sdRetDesc}
           </p>
           <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_so" label={t.btnRetSO} color="red" lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.va01_ret[lang]} />
+            journalData={buildJournals(simParams, materials, lang).va01_ret[lang]} />
           <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_del" label={t.btnRetDel} color="red" disabled={!sdReturnSteps.ret_so} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.vl01n_ret[lang]} />
+            journalData={buildJournals(simParams, materials, lang).vl01n_ret[lang]} />
           <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_credit" label={t.btnCreditMemo} color="red" disabled={!sdReturnSteps.ret_del} lang={lang} openPopup={openPopup}
-            journalData={JOURNAL_DATA.vf01_ret[lang]} />
+            journalData={buildJournals(simParams, materials, lang).vf01_ret[lang]} />
         </Card>
       </div>
 

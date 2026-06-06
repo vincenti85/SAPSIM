@@ -3617,11 +3617,11 @@ function App() {
   ];
 
   const TAB_GROUPS = [
-    { id:'grp_params',   label:'Variables', icon:'🎛️', tabIds:['params'] },
+    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun','flow','ledger'] },
+    { id:'grp_params',   label:'Intro',    icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa'] },
-    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['dryrun','flow','ledger'] },
   ];
   const activeGroup = TAB_GROUPS.find(g => g.tabIds.includes(activeTab)) || TAB_GROUPS[0];
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);

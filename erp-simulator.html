@@ -3103,53 +3103,121 @@ function App() {
     return bal;
   }, [mmSteps, simParams]);
 
-  /* ---- PP derived data (linked to MM stock) ---- */
-  const roh001FromMM = mmSteps.migo_gr ? 100 : 0;
+  /* ---- PP derived data (linked to simParams + MM stock) ---- */
   const ppInv = useMemo(() => {
-    // RM001: from MM 100KG; consumed 60KG (HALB GI) + 5KG (FERT GI)
-    let roh001 = roh001FromMM;
-    if (ppSteps.gi_h) roh001 -= 60;
-    if (ppSteps.gi_f) roh001 -= 5;
-    const roh001Amt = roh001 * 5.50;
-    // RM002: assume 20KG available; consumed 20KG at HALB GI
-    let roh002 = 20;
-    if (ppSteps.gi_h) roh002 -= 20;
-    const roh002Amt = roh002 * 3.20;
-    // SF001: produced 20EA (GR_H), consumed 10EA (GI_F)
+    const mm0  = simParams.mm[0]  || { matCode:'RM001', qty:100, stdPrice:5.50, poPrice:5.00 };
+    const ppH0 = simParams.pp.find(o => o.outCode === 'SF001') || simParams.pp[0] ||
+      { outCode:'SF001', outQty:20, components:[{code:'RM001',consumQty:60},{code:'RM002',consumQty:20}] };
+    const ppF0 = simParams.pp.find(o => o.outCode === 'FG001') || simParams.pp[1] ||
+      { outCode:'FG001', outQty:10, components:[{code:'SF001',consumQty:10},{code:'RM001',consumQty:5}] };
+
+    const rm001Std = mm0.stdPrice;
+    const rm002Std = 3.20;
+    const sf001Std = parseFloat((materials.find(m => m.MaterialCode === 'SF001') || {StandardPrice:'18.00'}).StandardPrice);
+    const fg001Std = parseFloat((materials.find(m => m.MaterialCode === 'FG001') || {StandardPrice:'45.00'}).StandardPrice);
+
+    let rm001 = mmSteps.migo_gr ? mm0.qty : 0;
+    const rm001_h = (ppH0.components.find(c=>c.code==='RM001') || {consumQty:60}).consumQty;
+    const rm001_f = (ppF0.components.find(c=>c.code==='RM001') || {consumQty:5}).consumQty;
+    if (ppSteps.gi_h) rm001 -= rm001_h;
+    if (ppSteps.gi_f) rm001 -= rm001_f;
+
+    const rm002_h = (ppH0.components.find(c=>c.code==='RM002') || {consumQty:20}).consumQty;
+    let rm002 = 20;
+    if (ppSteps.gi_h) rm002 -= rm002_h;
+
     let halb = 0;
-    if (ppSteps.gr_h) halb += 20;
-    if (ppSteps.gi_f) halb -= 10;
-    const halbAmt = halb * 18.00;
-    // FG001: produced 10EA (GR_F)
+    if (ppSteps.gr_h) halb += ppH0.outQty;
+    const sf001_f = (ppF0.components.find(c=>c.code==='SF001') || {consumQty:10}).consumQty;
+    if (ppSteps.gi_f) halb -= sf001_f;
+
     let fert = 0;
-    if (ppSteps.gr_f) fert += 10;
-    const fertAmt = fert * 45.00;
+    if (ppSteps.gr_f) fert += ppF0.outQty;
+
     return [
-      { code:'RM001', uom:'KG', qty:roh001, amt:roh001Amt },
-      { code:'RM002', uom:'KG', qty:roh002, amt:roh002Amt },
-      { code:'SF001', uom:'EA', qty:halb, amt:halbAmt },
-      { code:'FG001', uom:'EA', qty:fert, amt:fertAmt },
+      { code:'RM001', uom:'KG', qty:rm001, amt:+(rm001 * rm001Std).toFixed(2) },
+      { code:'RM002', uom:'KG', qty:rm002, amt:+(rm002 * rm002Std).toFixed(2) },
+      { code:'SF001', uom:'EA', qty:halb,  amt:+(halb  * sf001Std).toFixed(2) },
+      { code:'FG001', uom:'EA', qty:fert,  amt:+(fert  * fg001Std).toFixed(2) },
     ];
-  }, [ppSteps, roh001FromMM]);
+  }, [ppSteps, mmSteps, simParams, materials]);
 
   const wip = useMemo(() => {
-    let halb = 0;
-    if (ppSteps.gi_h) halb += 394;      // material 330+64
-    if (ppSteps.co11n_h) halb += 700;   // activities 400+300 (actual)
-    if (ppSteps.gr_h) halb -= 360;      // factory output credit (std)
-    if (ppSteps.ko88_h) halb -= 500;    // settlement variance moved out
-    let fert = 0;
-    if (ppSteps.gi_f) fert += 207.50;
-    if (ppSteps.co11n_f) fert += 225;
-    if (ppSteps.gr_f) fert -= 450;
-    if (ppSteps.ko88_f) fert += 30;
-    return { halb, fert };
-  }, [ppSteps]);
+    const ppH0 = simParams.pp.find(o => o.outCode === 'SF001') || simParams.pp[0] ||
+      { outQty:20, components:[{code:'RM001',consumQty:60},{code:'RM002',consumQty:20}],
+        laborHr:20, laborRate:14.675, machineHr:10, machineRate:14.00, ohRate:0 };
+    const ppF0 = simParams.pp.find(o => o.outCode === 'FG001') || simParams.pp[1] ||
+      { outQty:10, components:[{code:'SF001',consumQty:10},{code:'RM001',consumQty:5}],
+        laborHr:5, laborRate:25, machineHr:2.5, machineRate:35, ohRate:0 };
 
-  const ppVar = useMemo(() => ({
-    halb: ppSteps.ko88_h ? 500 : 0,
-    fert: ppSteps.ko88_f ? -30 : 0,
-  }), [ppSteps]);
+    const sf001Std = parseFloat((materials.find(m => m.MaterialCode === 'SF001') || {StandardPrice:'18.00'}).StandardPrice);
+    const fg001Std = parseFloat((materials.find(m => m.MaterialCode === 'FG001') || {StandardPrice:'45.00'}).StandardPrice);
+
+    const hGI  = (ppH0.components || []).reduce((s,c) => {
+      const std = parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+      return s + c.consumQty * std;
+    }, 0);
+    const hActivity = ppH0.laborHr * ppH0.laborRate + ppH0.machineHr * ppH0.machineRate +
+      (ppH0.laborHr * ppH0.laborRate + ppH0.machineHr * ppH0.machineRate) * (ppH0.ohRate/100);
+    const hGR  = ppH0.outQty * sf001Std;
+    const hKO88 = hGI + hActivity - hGR;
+
+    let halb = 0;
+    if (ppSteps.gi_h)    halb += hGI;
+    if (ppSteps.co11n_h) halb += hActivity;
+    if (ppSteps.gr_h)    halb -= hGR;
+    if (ppSteps.ko88_h)  halb -= hKO88;
+
+    const fGI = (ppF0.components || []).reduce((s,c) => {
+      const std = parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+      return s + c.consumQty * std;
+    }, 0);
+    const fActivity = ppF0.laborHr * ppF0.laborRate + ppF0.machineHr * ppF0.machineRate +
+      (ppF0.laborHr * ppF0.laborRate + ppF0.machineHr * ppF0.machineRate) * (ppF0.ohRate/100);
+    const fGR  = ppF0.outQty * fg001Std;
+    const fKO88 = fGI + fActivity - fGR;
+
+    let fert = 0;
+    if (ppSteps.gi_f)    fert += fGI;
+    if (ppSteps.co11n_f) fert += fActivity;
+    if (ppSteps.gr_f)    fert -= fGR;
+    if (ppSteps.ko88_f)  fert += fKO88;
+
+    return { halb: +halb.toFixed(2), fert: +fert.toFixed(2) };
+  }, [ppSteps, simParams, materials]);
+
+  const ppVar = useMemo(() => {
+    const ppH0 = simParams.pp.find(o => o.outCode === 'SF001') || simParams.pp[0] ||
+      { outQty:20, components:[{code:'RM001',consumQty:60},{code:'RM002',consumQty:20}],
+        laborHr:20, laborRate:14.675, machineHr:10, machineRate:14.00, ohRate:0 };
+    const ppF0 = simParams.pp.find(o => o.outCode === 'FG001') || simParams.pp[1] ||
+      { outQty:10, components:[{code:'SF001',consumQty:10},{code:'RM001',consumQty:5}],
+        laborHr:5, laborRate:25, machineHr:2.5, machineRate:35, ohRate:0 };
+
+    const sf001Std = parseFloat((materials.find(m=>m.MaterialCode==='SF001')||{StandardPrice:'18.00'}).StandardPrice);
+    const fg001Std = parseFloat((materials.find(m=>m.MaterialCode==='FG001')||{StandardPrice:'45.00'}).StandardPrice);
+
+    const hGI = (ppH0.components||[]).reduce((s,c)=>{
+      const std=parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+      return s+c.consumQty*std;
+    },0);
+    const hAct = ppH0.laborHr*ppH0.laborRate + ppH0.machineHr*ppH0.machineRate +
+      (ppH0.laborHr*ppH0.laborRate+ppH0.machineHr*ppH0.machineRate)*(ppH0.ohRate/100);
+    const hVar = +((hGI + hAct) - ppH0.outQty * sf001Std).toFixed(2);
+
+    const fGI = (ppF0.components||[]).reduce((s,c)=>{
+      const std=parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+      return s+c.consumQty*std;
+    },0);
+    const fAct = ppF0.laborHr*ppF0.laborRate + ppF0.machineHr*ppF0.machineRate +
+      (ppF0.laborHr*ppF0.laborRate+ppF0.machineHr*ppF0.machineRate)*(ppF0.ohRate/100);
+    const fVar = +((fGI + fAct) - ppF0.outQty * fg001Std).toFixed(2);
+
+    return {
+      halb: ppSteps.ko88_h ? hVar : 0,
+      fert: ppSteps.ko88_f ? fVar : 0,
+    };
+  }, [ppSteps, simParams, materials]);
 
   /* ---- FI/CO derived ---- */
   const ficoDone = ficoSteps.pc;

@@ -3221,22 +3221,61 @@ function App() {
 
   /* ---- FI/CO derived ---- */
   const ficoDone = ficoSteps.pc;
-  const copa = { actualCOGS: ficoDone ? 326.875 : 225 };
+  const copa = useMemo(() => {
+    const sd0 = simParams.sd[0] || { matCode:'FG001', qty:5, salesPrice:150 };
+    const fg001Std = parseFloat((materials.find(m=>m.MaterialCode==='FG001')||{StandardPrice:'45.00'}).StandardPrice);
+    const stdCOGS = +(sd0.qty * fg001Std).toFixed(2);
 
-  /* ---- SD derived data (linked to PP finished goods) ---- */
-  const fertFromPP = ppSteps.gr_f ? 10 : 0;
+    const mm0  = simParams.mm[0]  || { qty:100, stdPrice:5.50, poPrice:5.00 };
+    const ppH0 = simParams.pp.find(o=>o.outCode==='SF001') || simParams.pp[0] ||
+      { outQty:20, components:[{code:'RM001',consumQty:60},{code:'RM002',consumQty:20}],
+        laborHr:20, laborRate:14.675, machineHr:10, machineRate:14.00, ohRate:0 };
+    const ppF0 = simParams.pp.find(o=>o.outCode==='FG001') || simParams.pp[1] ||
+      { outQty:10, components:[{code:'SF001',consumQty:10},{code:'RM001',consumQty:5}],
+        laborHr:5, laborRate:25, machineHr:2.5, machineRate:35, ohRate:0 };
+
+    const sf001Std = parseFloat((materials.find(m=>m.MaterialCode==='SF001')||{StandardPrice:'18.00'}).StandardPrice);
+    const mmPPV = +(mm0.qty * (mm0.stdPrice - mm0.poPrice)).toFixed(2);
+    const hGI   = (ppH0.components||[]).reduce((s,c)=>{
+      const std=parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+      return s+c.consumQty*std;
+    },0);
+    const hAct  = ppH0.laborHr*ppH0.laborRate+ppH0.machineHr*ppH0.machineRate;
+    const hVar  = (hGI+hAct) - ppH0.outQty*sf001Std;
+    const fGI   = (ppF0.components||[]).reduce((s,c)=>{
+      const std=parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+      return s+c.consumQty*std;
+    },0);
+    const fAct  = ppF0.laborHr*ppF0.laborRate+ppF0.machineHr*ppF0.machineRate;
+    const fVar  = (fGI+fAct) - ppF0.outQty*fg001Std;
+    const mlAdj = +((hVar - mmPPV*0.65)/2 + fVar).toFixed(2) / 2;
+    const actualCOGS = +(stdCOGS + (ficoDone ? mlAdj : 0)).toFixed(2);
+    return { actualCOGS };
+  }, [ficoSteps, simParams, materials]);
+
+  /* ---- SD derived data ---- */
   const sdInv = useMemo(() => {
-    let fert = fertFromPP;
-    if (sdSteps.vl01n) fert -= 5;
-    return [{ code:'FG001', uom:'EA', qty:fert, amt:fert*45.00 }];
-  }, [sdSteps, fertFromPP]);
+    const sd0 = simParams.sd[0] || { matCode:'FG001', qty:5 };
+    const fg001Std = parseFloat((materials.find(m=>m.MaterialCode==='FG001')||{StandardPrice:'45.00'}).StandardPrice);
+    const ppF0 = simParams.pp.find(o=>o.outCode==='FG001') || simParams.pp[1] || { outQty:10 };
+    let fert = ppSteps.gr_f ? ppF0.outQty : 0;
+    if (sdSteps.vl01n) fert -= sd0.qty;
+    return [{ code:sd0.matCode, uom:'EA', qty:fert, amt:+(fert * fg001Std).toFixed(2) }];
+  }, [sdSteps, ppSteps, simParams, materials]);
+
   const arBalance = useMemo(() => {
+    const sd0 = simParams.sd[0] || { qty:5, salesPrice:150 };
+    const rev = +(sd0.qty * sd0.salesPrice).toFixed(2);
     let bal = 0;
-    if (sdSteps.vf01) bal += 750;
-    if (sdSteps.f28) bal -= 750;
+    if (sdSteps.vf01) bal += rev;
+    if (sdSteps.f28)  bal -= rev;
     return bal;
-  }, [sdSteps]);
-  const revenue = sdSteps.vf01 ? 750 : 0;
+  }, [sdSteps, simParams]);
+
+  const revenue = useMemo(() => {
+    const sd0 = simParams.sd[0] || { qty:5, salesPrice:150 };
+    return sdSteps.vf01 ? +(sd0.qty * sd0.salesPrice).toFixed(2) : 0;
+  }, [sdSteps, simParams]);
 
   const tabLabels = T[lang].tabs;
   const tabs = [

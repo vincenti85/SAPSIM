@@ -41,6 +41,37 @@ const DEFAULT_MATERIALS = [
   { MaterialCode:'RM001',  Description:'Aluminum Sheet',       MaterialType:'RM',  StandardPrice:'5.50',  UOM:'KG', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'0.5' },
 ];
 
+const DEFAULT_PARAMS = {
+  mm: [
+    { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' },
+  ],
+  pp: [
+    {
+      outCode:'SF001', outQty:20, scrapPct:0,
+      components:[
+        { code:'RM001', consumQty:60 },
+        { code:'RM002', consumQty:20 },
+      ],
+      laborHr:20, laborRate:14.675,
+      machineHr:10, machineRate:14.00,
+      ohRate:0,
+    },
+    {
+      outCode:'FG001', outQty:10, scrapPct:0,
+      components:[
+        { code:'SF001', consumQty:10 },
+        { code:'RM001', consumQty:5 },
+      ],
+      laborHr:5, laborRate:25,
+      machineHr:2.5, machineRate:35,
+      ohRate:0,
+    },
+  ],
+  sd: [
+    { matCode:'FG001', qty:5, salesPrice:150, customer:'C001' },
+  ],
+};
+
 const COMPANY = { code:'US01', name:'ABC Auto Parts Inc.', plant:'P001', plantName:'Alabama Manufacturing Plant' };
 const VENDOR   = { code:'V001', name:'Summit Aluminum Supply' };
 const CUSTOMER = { code:'C001', name:'Northstar Motors Inc.' };
@@ -2944,6 +2975,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('master');
   const [lang, setLang] = useState('ko'); // 'ko' | 'en'
   const [materials, setMaterials] = useState(DEFAULT_MATERIALS);
+  const [simParams, setSimParams] = useState(DEFAULT_PARAMS);
   const [showPopup, setShowPopup] = useState(false);
   const [popupData, setPopupData] = useState(null);
 

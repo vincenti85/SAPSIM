@@ -1996,6 +1996,245 @@ const MasterTab = ({ materials, setMaterials, ckSteps, setCkSteps, openPopup, la
 };
 
 /* =========================================================================
+   PARAMETERS TAB — variable inputs for MM / PP / SD
+   ========================================================================= */
+function ParametersTab({ simParams, setSimParams, materials, lang }) {
+  const isKo = lang === 'ko';
+
+  const [mmErr, setMmErr] = React.useState('');
+  const [ppErr, setPpErr] = React.useState('');
+  const [sdErr, setSdErr] = React.useState('');
+
+  function handleUpload(kind, ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const rows = parseParamCSV(String(e.target.result), kind);
+        setSimParams(prev => ({ ...prev, [kind]: rows }));
+        if (kind === 'mm') setMmErr('');
+        if (kind === 'pp') setPpErr('');
+        if (kind === 'sd') setSdErr('');
+      } catch (err) {
+        if (kind === 'mm') setMmErr(err.message);
+        if (kind === 'pp') setPpErr(err.message);
+        if (kind === 'sd') setSdErr(err.message);
+      }
+      ev.target.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  function resetModule(kind) {
+    setSimParams(prev => ({ ...prev, [kind]: DEFAULT_PARAMS[kind] }));
+    if (kind === 'mm') setMmErr('');
+    if (kind === 'pp') setPpErr('');
+    if (kind === 'sd') setSdErr('');
+  }
+
+  function setMmField(idx, key, val) {
+    setSimParams(prev => {
+      const next = prev.mm.map((r, i) => i === idx ? { ...r, [key]: key === 'matCode' || key === 'vendor' ? val : parseFloat(val) || 0 } : r);
+      return { ...prev, mm: next };
+    });
+  }
+  function setPpField(idx, key, val) {
+    setSimParams(prev => {
+      const next = prev.pp.map((r, i) => i === idx ? { ...r, [key]: key === 'outCode' ? val : parseFloat(val) || 0 } : r);
+      return { ...prev, pp: next };
+    });
+  }
+  function setSdField(idx, key, val) {
+    setSimParams(prev => {
+      const next = prev.sd.map((r, i) => i === idx ? { ...r, [key]: key === 'matCode' || key === 'customer' ? val : parseFloat(val) || 0 } : r);
+      return { ...prev, sd: next };
+    });
+  }
+
+  const tdCls = 'border border-gray-200 px-2 py-1 text-sm';
+  const inCls = 'w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded px-1 text-sm';
+  const lbl = (ko, en) => isKo ? ko : en;
+
+  const mm0 = simParams.mm[0] || {};
+  const mmPPV = mm0.qty && mm0.stdPrice && mm0.poPrice
+    ? +(mm0.qty * (mm0.stdPrice - mm0.poPrice)).toFixed(2) : 0;
+
+  return (
+    <div className="space-y-6 p-4">
+      {/* MM Card */}
+      <div className="bg-white rounded-lg shadow p-4 border border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-700">{String.fromCodePoint(0x1F6D2)} {lbl('구매 변수 (MM)','Purchase Variables (MM)')}</h3>
+          <div className="flex gap-2">
+            <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">
+              {lbl('CSV 업로드','Upload CSV')}
+              <input type="file" accept=".csv,text/csv" onChange={e => handleUpload('mm', e)} className="hidden" />
+            </label>
+            <button onClick={() => resetModule('mm')} className="bg-gray-200 text-gray-700 text-xs px-3 py-1 rounded hover:bg-gray-300">
+              {lbl('기본값','Reset')}
+            </button>
+          </div>
+        </div>
+        {mmErr && <p className="text-red-500 text-xs mb-2">{mmErr}</p>}
+        <table className="w-full border-collapse text-sm mb-2">
+          <thead className="bg-gray-50">
+            <tr>
+              {['MatCode','Qty','PO Price','Std Price','Vendor'].map(h => (
+                <th key={h} className={tdCls + ' font-medium text-gray-600 text-left'}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {simParams.mm.map((row, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className={tdCls}><input className={inCls} value={row.matCode} onChange={e => setMmField(i,'matCode',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} type="number" step="1" value={row.qty} onChange={e => setMmField(i,'qty',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} type="number" step="0.01" value={row.poPrice} onChange={e => setMmField(i,'poPrice',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} type="number" step="0.01" value={row.stdPrice} onChange={e => setMmField(i,'stdPrice',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} value={row.vendor} onChange={e => setMmField(i,'vendor',e.target.value)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-xs text-gray-500">
+          {lbl('미리보기','Preview')}: {lbl('재고 평가액','Inventory')} = ${mm0.qty && mm0.stdPrice ? +(mm0.qty * mm0.stdPrice).toFixed(2) : '—'} &nbsp;|&nbsp;
+          PPV = {mmPPV >= 0 ? '+' : ''}{mmPPV} {mmPPV >= 0 ? lbl('유리','Fav') : lbl('불리','Unfav')}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          {lbl('CSV 컬럼:','Required CSV columns:')} MatCode, Qty, POPrice, StdPrice, Vendor
+        </p>
+      </div>
+
+      {/* PP Card */}
+      <div className="bg-white rounded-lg shadow p-4 border border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-700">{String.fromCodePoint(0x1F3ED)} {lbl('생산 변수 (PP)','Production Variables (PP)')}</h3>
+          <div className="flex gap-2">
+            <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">
+              {lbl('CSV 업로드','Upload CSV')}
+              <input type="file" accept=".csv,text/csv" onChange={e => handleUpload('pp', e)} className="hidden" />
+            </label>
+            <button onClick={() => resetModule('pp')} className="bg-gray-200 text-gray-700 text-xs px-3 py-1 rounded hover:bg-gray-300">
+              {lbl('기본값','Reset')}
+            </button>
+          </div>
+        </div>
+        {ppErr && <p className="text-red-500 text-xs mb-2">{ppErr}</p>}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm mb-2">
+            <thead className="bg-gray-50">
+              <tr>
+                {['OutCode','OutQty','ScrapPct','Components (Code:Qty;…)','LaborHr','LaborRate','MachHr','MachRate','OHRate%'].map(h => (
+                  <th key={h} className={tdCls + ' font-medium text-gray-600 text-left whitespace-nowrap'}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {simParams.pp.map((row, i) => {
+                const compStr = (row.components||[]).map(c => `${c.code}:${c.consumQty}`).join(';');
+                return (
+                  <tr key={i} className="hover:bg-gray-50 align-top">
+                    <td className={tdCls}><input className={inCls} value={row.outCode} onChange={e=>setPpField(i,'outCode',e.target.value)} /></td>
+                    <td className={tdCls}><input className={inCls} type="number" value={row.outQty} onChange={e=>setPpField(i,'outQty',e.target.value)} /></td>
+                    <td className={tdCls}><input className={inCls} type="number" step="0.01" value={row.scrapPct} onChange={e=>setPpField(i,'scrapPct',e.target.value)} /></td>
+                    <td className={tdCls}>
+                      <input className={inCls + ' min-w-[160px]'} value={compStr}
+                        onChange={e => {
+                          const comps = e.target.value.split(';').filter(Boolean).map(p=>{
+                            const [code,qty]=p.split(':'); return {code:(code||'').trim(), consumQty:parseFloat(qty)||0};
+                          });
+                          setSimParams(prev => ({ ...prev, pp: prev.pp.map((r,ri)=>ri===i?{...r,components:comps}:r) }));
+                        }} />
+                    </td>
+                    <td className={tdCls}><input className={inCls} type="number" step="0.5" value={row.laborHr} onChange={e=>setPpField(i,'laborHr',e.target.value)} /></td>
+                    <td className={tdCls}><input className={inCls} type="number" step="0.01" value={row.laborRate} onChange={e=>setPpField(i,'laborRate',e.target.value)} /></td>
+                    <td className={tdCls}><input className={inCls} type="number" step="0.5" value={row.machineHr} onChange={e=>setPpField(i,'machineHr',e.target.value)} /></td>
+                    <td className={tdCls}><input className={inCls} type="number" step="0.01" value={row.machineRate} onChange={e=>setPpField(i,'machineRate',e.target.value)} /></td>
+                    <td className={tdCls}><input className={inCls} type="number" step="1" value={row.ohRate} onChange={e=>setPpField(i,'ohRate',e.target.value)} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {simParams.pp.map((row, i) => {
+          const labAmt  = +(row.laborHr  * row.laborRate  ).toFixed(2);
+          const machAmt = +(row.machineHr * row.machineRate).toFixed(2);
+          const totAct  = +(labAmt + machAmt + (labAmt+machAmt)*(row.ohRate/100)).toFixed(2);
+          const stdOut  = parseFloat((materials.find(m=>m.MaterialCode===row.outCode)||{StandardPrice:'0'}).StandardPrice);
+          const grAmt   = +(row.outQty * stdOut).toFixed(2);
+          const compAmt = +((row.components||[]).reduce((s,c)=>{
+            const std=parseFloat((materials.find(m=>m.MaterialCode===c.code)||{StandardPrice:'0'}).StandardPrice);
+            return s+c.consumQty*std;
+          },0)).toFixed(2);
+          const variance= +(compAmt + totAct - grAmt).toFixed(2);
+          return (
+            <p key={i} className="text-xs text-gray-500">
+              {row.outCode}: {lbl('자재비','Mat')} ${compAmt} + {lbl('가공비','Act')} ${totAct} = {lbl('실제','Actual')} ${+(compAmt+totAct).toFixed(2)} / {lbl('표준 GR','Std GR')} ${grAmt} &rarr; {lbl('차이','Var')} {variance > 0 ? '+' : ''}{variance} ({variance > 0 ? lbl('불리','Unfav') : lbl('유리','Fav')})
+            </p>
+          );
+        })}
+        <p className="text-xs text-gray-400 mt-1">
+          {lbl('CSV 컬럼:','Required CSV columns:')} OutCode, OutQty, ScrapPct, Components (RM001:60;RM002:20), LaborHr, LaborRate, MachineHr, MachineRate, OHRate
+        </p>
+      </div>
+
+      {/* SD Card */}
+      <div className="bg-white rounded-lg shadow p-4 border border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-700">{String.fromCodePoint(0x1F4B5)} {lbl('영업 변수 (SD)','Sales Variables (SD)')}</h3>
+          <div className="flex gap-2">
+            <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">
+              {lbl('CSV 업로드','Upload CSV')}
+              <input type="file" accept=".csv,text/csv" onChange={e => handleUpload('sd', e)} className="hidden" />
+            </label>
+            <button onClick={() => resetModule('sd')} className="bg-gray-200 text-gray-700 text-xs px-3 py-1 rounded hover:bg-gray-300">
+              {lbl('기본값','Reset')}
+            </button>
+          </div>
+        </div>
+        {sdErr && <p className="text-red-500 text-xs mb-2">{sdErr}</p>}
+        <table className="w-full border-collapse text-sm mb-2">
+          <thead className="bg-gray-50">
+            <tr>
+              {['MatCode','Qty','Sales Price','Customer'].map(h => (
+                <th key={h} className={tdCls + ' font-medium text-gray-600 text-left'}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {simParams.sd.map((row, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className={tdCls}><input className={inCls} value={row.matCode} onChange={e=>setSdField(i,'matCode',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} type="number" step="1" value={row.qty} onChange={e=>setSdField(i,'qty',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} type="number" step="0.01" value={row.salesPrice} onChange={e=>setSdField(i,'salesPrice',e.target.value)} /></td>
+                <td className={tdCls}><input className={inCls} value={row.customer} onChange={e=>setSdField(i,'customer',e.target.value)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {simParams.sd.map((row, i) => {
+          const cogs = parseFloat((materials.find(m=>m.MaterialCode===row.matCode)||{StandardPrice:'45.00'}).StandardPrice);
+          const rev   = +(row.qty * row.salesPrice).toFixed(2);
+          const cost  = +(row.qty * cogs).toFixed(2);
+          const gp    = +(rev - cost).toFixed(2);
+          const gpm   = rev ? +((gp/rev)*100).toFixed(1) : 0;
+          return (
+            <p key={i} className="text-xs text-gray-500">
+              {row.matCode}: {lbl('매출','Rev')} ${rev} / {lbl('원가','COGS')} ${cost} / {lbl('총이익','GP')} ${gp} ({gpm}%)
+            </p>
+          );
+        })}
+        <p className="text-xs text-gray-400 mt-1">
+          {lbl('CSV 컬럼:','Required CSV columns:')} MatCode, Qty, SalesPrice, Customer
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
    TAB 2: MM PURCHASING
    ========================================================================= */
 const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lang='ko', mmReturnSteps, setMmReturnSteps, miSteps, setMiSteps, sdebSteps, setSdebSteps }) => {

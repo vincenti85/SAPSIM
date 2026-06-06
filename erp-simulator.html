@@ -1816,7 +1816,7 @@ const InvTable = ({ rows, lang='ko' }) => (
 /* =========================================================================
    TAB 1: MASTER / BOM
    ========================================================================= */
-const MasterTab = ({ materials, setMaterials, ckSteps, setCkSteps, openPopup, lang='ko' }) => {
+const MasterTab = ({ materials, setMaterials, ckSteps, setCkSteps, openPopup, simParams, lang='ko' }) => {
   const t = T[lang];
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -2237,7 +2237,7 @@ function ParametersTab({ simParams, setSimParams, materials, lang }) {
 /* =========================================================================
    TAB 2: MM PURCHASING
    ========================================================================= */
-const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lang='ko', mmReturnSteps, setMmReturnSteps, miSteps, setMiSteps, sdebSteps, setSdebSteps }) => {
+const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lang='ko', mmReturnSteps, setMmReturnSteps, miSteps, setMiSteps, sdebSteps, setSdebSteps, simParams, materials }) => {
   const t = T[lang];
   return (
     <div>
@@ -2349,7 +2349,7 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
 /* =========================================================================
    TAB 3: PP PRODUCTION
    ========================================================================= */
-const PPTab = ({ ppSteps, setPpSteps, openPopup, ppInv, wip, ppVar, lang='ko' }) => {
+const PPTab = ({ ppSteps, setPpSteps, openPopup, ppInv, wip, ppVar, lang='ko', simParams, materials }) => {
   const t = T[lang];
   const phase1Done = ppSteps.co01_h && ppSteps.gi_h && ppSteps.co11n_h && ppSteps.gr_h;
   return (
@@ -2460,7 +2460,7 @@ const CKM3Table = ({ title, rows, lang='ko' }) => (
   </Card>
 );
 
-const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Steps, setMr21Steps }) => {
+const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Steps, setMr21Steps, simParams, materials }) => {
   const t = T[lang];
   const rohRows = [
     { label:t.ckm3Opening, qty:'0 KG', prelim:'$0.00', diff:'$0.00', price:'-' },
@@ -2589,9 +2589,9 @@ const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Step
 /* =========================================================================
    TAB 5: SD SALES
    ========================================================================= */
-const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, ficoDone, lang='ko', sdReturnSteps, setSdReturnSteps }) => {
+const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, ficoDone, lang='ko', sdReturnSteps, setSdReturnSteps, simParams, materials, copa }) => {
   const t = T[lang];
-  const actualCOGS = ficoDone ? 326.875 : 225;
+  const actualCOGS = copa ? copa.actualCOGS : (ficoDone ? 326.875 : 225);
   const stdMargin = 750 - 225;
   const actualMargin = 750 - actualCOGS;
   return (
@@ -3476,7 +3476,7 @@ function App() {
     if (ppSteps.gi_f)    fert += fGI;
     if (ppSteps.co11n_f) fert += fActivity;
     if (ppSteps.gr_f)    fert -= fGR;
-    if (ppSteps.ko88_f)  fert += fKO88;
+    if (ppSteps.ko88_f)  fert -= fKO88;
 
     return { halb: +halb.toFixed(2), fert: +fert.toFixed(2) };
   }, [ppSteps, simParams, materials]);
@@ -3699,11 +3699,11 @@ function App() {
           </div>
         )}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
-        {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} lang={lang} />}
-        {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} />}
-        {activeTab==='pp' && <PPTab ppSteps={ppSteps} setPpSteps={setPpSteps} openPopup={openPopup} ppInv={ppInv} wip={wip} ppVar={ppVar} lang={lang} />}
-        {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} />}
-        {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} />}
+        {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} simParams={simParams} lang={lang} />}
+        {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} simParams={simParams} materials={materials} />}
+        {activeTab==='pp' && <PPTab ppSteps={ppSteps} setPpSteps={setPpSteps} openPopup={openPopup} ppInv={ppInv} wip={wip} ppVar={ppVar} lang={lang} simParams={simParams} materials={materials} />}
+        {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} simParams={simParams} materials={materials} />}
+        {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
         {activeTab==='ledger' && <LedgerTab mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} ckSteps={ckSteps} materials={materials} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}

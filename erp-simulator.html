@@ -3106,7 +3106,7 @@ const FlowTab = ({ lang }) => {
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <div>
           <h2 className="text-base font-bold text-slate-800">🔀 {t('전체 업무 흐름', 'End-to-End Business Flow')}</h2>
-          <p className="text-xs text-slate-500 mt-0.5">{t('마스터/BOM부터 구매·생산·판매, 그리고 원가(CO)·회계(FI)까지 한 장으로', 'Master/BOM to Procure-Produce-Sell, plus Costing (CO) and Accounting (FI) in one view')}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{t('원자재가 제품이 되어 고객의 현금이 되기까지 — 우리 회사 일이 한눈에', 'How raw material becomes a product and then cash — your company at a glance')}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => exportImg('png')} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors">⬇ PNG</button>
@@ -3114,81 +3114,96 @@ const FlowTab = ({ lang }) => {
         </div>
       </div>
       <div className="bg-white rounded-xl border border-slate-200 p-3 overflow-x-auto">
-        <svg id="flowSvg" viewBox="0 0 1060 540" className="w-full h-auto" style={{ minWidth: '820px' }} xmlns="http://www.w3.org/2000/svg">
+        <svg id="flowSvg" viewBox="0 0 1080 580" className="w-full h-auto" style={{ minWidth: '860px' }} xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <marker id="arr" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L6.5,3 L0,6 Z" fill="#64748b" />
+            <marker id="arr" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#6366f1" />
             </marker>
+            <marker id="arrG" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#94a3b8" />
+            </marker>
+            <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.12" />
+            </filter>
+            <linearGradient id="gPrep" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ecfdf5" /><stop offset="1" stopColor="#d1fae5" /></linearGradient>
+            <linearGradient id="gBuy"  x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#eff6ff" /><stop offset="1" stopColor="#dbeafe" /></linearGradient>
+            <linearGradient id="gMake" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fffbeb" /><stop offset="1" stopColor="#fef3c7" /></linearGradient>
+            <linearGradient id="gSell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff1f2" /><stop offset="1" stopColor="#ffe4e6" /></linearGradient>
+            <linearGradient id="gCash" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f0fdf4" /><stop offset="1" stopColor="#dcfce7" /></linearGradient>
+            <linearGradient id="gCO"   x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f5f3ff" /><stop offset="1" stopColor="#ede9fe" /></linearGradient>
+            <linearGradient id="gFI"   x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f8fafc" /><stop offset="1" stopColor="#eef2f6" /></linearGradient>
           </defs>
-          <rect x="0" y="0" width="1060" height="540" fill="#ffffff" />
+          <rect x="0" y="0" width="1080" height="580" fill="#ffffff" />
 
-          {/* cycle brackets */}
-          <path d="M232,52 L232,42 L408,42 L408,52" fill="none" stroke="#2563eb" strokeWidth="1.2" />
-          <text x="320" y="34" textAnchor="middle" fontSize="12" fontWeight="700" fill="#1e3a8a">{t('P2P 구매~지급', 'P2P (Procure-to-Pay)')}</text>
-          <path d="M692,52 L692,42 L868,42 L868,52" fill="none" stroke="#e11d48" strokeWidth="1.2" />
-          <text x="780" y="34" textAnchor="middle" fontSize="12" fontWeight="700" fill="#9f1239">{t('O2C 수주~수금', 'O2C (Order-to-Cash)')}</text>
+          {/* story banner */}
+          <rect x="290" y="14" width="500" height="32" rx="16" fill="#eef2ff" stroke="#c7d2fe" strokeWidth="1" />
+          <text x="540" y="35" textAnchor="middle" fontSize="12.5" fontWeight="700" fill="#4338ca">🚚 {t('원자재가  →  제품이  →  고객의 현금이 되기까지', 'Raw material  →  product  →  customer cash')}</text>
 
-          {/* Master */}
-          {box(20, 60, 162, 96, '#d1fae5', '#059669')}
-          <text x="101" y="90" textAnchor="middle" fontSize="13" fontWeight="800" fill="#065f46">🧱 {t('마스터 & BOM', 'Master & BOM')}</text>
-          <text x="101" y="112" textAnchor="middle" fontSize="10.5" fill="#047857">{t('자재 · BOM · 표준원가', 'Material · BOM · Std cost')}</text>
-          <text x="101" y="132" textAnchor="middle" fontSize="10.5" fill="#047857">RM → SF → FG</text>
-          <line x1="182" y1="108" x2="228" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
-          <text x="205" y="101" textAnchor="middle" fontSize="9" fill="#64748b">{t('정의', 'define')}</text>
+          {/* cycle labels */}
+          <path d="M233,82 L233,74 L417,74 L417,82" fill="none" stroke="#3b82f6" strokeWidth="1.2" />
+          <text x="325" y="68" textAnchor="middle" fontSize="11" fontWeight="700" fill="#1d4ed8">🔄 {t('구매 사이클 (사서 돈 내기)', 'Buy cycle (buy then pay)')}</text>
+          <path d="M659,82 L659,74 L843,74 L843,82" fill="none" stroke="#f43f5e" strokeWidth="1.2" />
+          <text x="751" y="68" textAnchor="middle" fontSize="11" fontWeight="700" fill="#be123c">🔄 {t('판매 사이클 (팔고 돈 받기)', 'Sell cycle (sell then collect)')}</text>
 
-          {/* MM */}
-          {box(230, 60, 180, 96, '#dbeafe', '#2563eb')}
-          <text x="320" y="88" textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e3a8a">🛒 {t('MM 구매', 'MM Procurement')}</text>
-          <text x="320" y="112" textAnchor="middle" fontSize="10" fill="#1d4ed8">{t('발주 → 입고 → 송장', 'PO → Receipt → Invoice')}</text>
-          <text x="320" y="130" textAnchor="middle" fontSize="10" fill="#1d4ed8">→ {t('지급', 'Payment')}</text>
-          <line x1="410" y1="108" x2="458" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
-          <text x="434" y="101" textAnchor="middle" fontSize="9" fill="#64748b">{t('원자재', 'material')}</text>
+          {/* journey cards */}
+          {[
+            { x:20,  g:'url(#gPrep)', br:'#10b981', tc:'#065f46', sc:'#047857', badge:'①', emoji:'🧱', title:t('준비','Set up'),    sap:t('마스터 · BOM','Master · BOM'),  d1:t('제품·재료 정보를','Register the'),     d2:t('등록해요','product & material') },
+            { x:233, g:'url(#gBuy)',  br:'#3b82f6', tc:'#1e3a8a', sc:'#1d4ed8', badge:'②', emoji:'🛒', title:t('사기','Buy'),       sap:t('구매 · MM','Purchasing · MM'),   d1:t('협력사에서','Buy raw material'),       d2:t('원자재를 사와요','from suppliers') },
+            { x:446, g:'url(#gMake)', br:'#f59e0b', tc:'#92400e', sc:'#b45309', badge:'③', emoji:'🏭', title:t('만들기','Make'),     sap:t('생산 · PP','Production · PP'),    d1:t('공장에서 제품을','Make products'),      d2:t('만들어요','in the factory') },
+            { x:659, g:'url(#gSell)', br:'#f43f5e', tc:'#9f1239', sc:'#be123c', badge:'④', emoji:'💵', title:t('팔기','Sell'),       sap:t('판매 · SD','Sales · SD'),        d1:t('고객에게 제품을','Sell products'),      d2:t('팔아요','to customers') },
+            { x:872, g:'url(#gCash)', br:'#22c55e', tc:'#166534', sc:'#15803d', badge:'⑤', emoji:'💰', title:t('받기','Get paid'),   sap:t('현금 · 회수','Cash · Collect'),   d1:t('판매대금을','Collect the') ,           d2:t('회수해요','cash & margin') },
+          ].map((s, i) => {
+            const cx = s.x + 92;
+            return (
+              <g key={i}>
+                <rect x={s.x} y="88" width="184" height="118" rx="18" fill={s.g} stroke={s.br} strokeWidth="1.5" filter="url(#soft)" />
+                <text x={s.x + 18} y="112" fontSize="15" fontWeight="800" fill={s.br}>{s.badge}</text>
+                <text x={cx} y="126" textAnchor="middle" fontSize="24">{s.emoji}</text>
+                <text x={cx} y="152" textAnchor="middle" fontSize="16" fontWeight="800" fill={s.tc}>{s.title}</text>
+                <text x={cx} y="169" textAnchor="middle" fontSize="9" fill={s.sc} opacity="0.65">{s.sap}</text>
+                <text x={cx} y="188" textAnchor="middle" fontSize="10.5" fill={s.tc}>{s.d1}</text>
+                <text x={cx} y="201" textAnchor="middle" fontSize="10.5" fill={s.tc}>{s.d2}</text>
+              </g>
+            );
+          })}
 
-          {/* PP */}
-          {box(460, 60, 180, 96, '#fef3c7', '#d97706')}
-          <text x="550" y="88" textAnchor="middle" fontSize="13" fontWeight="800" fill="#92400e">🏭 {t('PP 생산', 'PP Production')}</text>
-          <text x="550" y="112" textAnchor="middle" fontSize="9.5" fill="#b45309">{t('생산오더 → 출고 → 확정', 'Order → Issue → Confirm')}</text>
-          <text x="550" y="130" textAnchor="middle" fontSize="9.5" fill="#b45309">→ {t('입고 → 정산', 'GR → Settle')}</text>
-          <line x1="640" y1="108" x2="688" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
-          <text x="664" y="101" textAnchor="middle" fontSize="9" fill="#64748b">{t('완제품', 'finished')}</text>
-
-          {/* SD */}
-          {box(690, 60, 180, 96, '#ffe4e6', '#e11d48')}
-          <text x="780" y="88" textAnchor="middle" fontSize="13" fontWeight="800" fill="#9f1239">💵 {t('SD 매출', 'SD Sales')}</text>
-          <text x="780" y="112" textAnchor="middle" fontSize="10" fill="#be123c">{t('판매오더 → 출하', 'Order → Delivery')}</text>
-          <text x="780" y="130" textAnchor="middle" fontSize="10" fill="#be123c">→ {t('청구 → 수취', 'Billing → Receipt')}</text>
-          <line x1="870" y1="108" x2="916" y2="108" stroke="#64748b" strokeWidth="1.5" markerEnd="url(#arr)" />
-
-          {/* Cash */}
-          {box(918, 78, 120, 60, '#dcfce7', '#16a34a')}
-          <text x="978" y="104" textAnchor="middle" fontSize="12" fontWeight="800" fill="#166534">💰 {t('현금', 'Cash')}</text>
-          <text x="978" y="122" textAnchor="middle" fontSize="9.5" fill="#15803d">{t('회수 / 마진', 'collect / margin')}</text>
+          {/* arrows between cards */}
+          <line x1="207" y1="147" x2="230" y2="147" stroke="#6366f1" strokeWidth="2" markerEnd="url(#arr)" />
+          <text x="218" y="139" textAnchor="middle" fontSize="8.5" fill="#6366f1">{t('자재', 'items')}</text>
+          <line x1="420" y1="147" x2="443" y2="147" stroke="#6366f1" strokeWidth="2" markerEnd="url(#arr)" />
+          <text x="431" y="139" textAnchor="middle" fontSize="8.5" fill="#6366f1">{t('원자재', 'material')}</text>
+          <line x1="633" y1="147" x2="656" y2="147" stroke="#6366f1" strokeWidth="2" markerEnd="url(#arr)" />
+          <text x="644" y="139" textAnchor="middle" fontSize="8.5" fill="#6366f1">{t('완제품', 'product')}</text>
+          <line x1="846" y1="147" x2="869" y2="147" stroke="#6366f1" strokeWidth="2" markerEnd="url(#arr)" />
+          <text x="857" y="139" textAnchor="middle" fontSize="8.5" fill="#6366f1">{t('대금', 'payment')}</text>
 
           {/* downward feeds to CO */}
-          <line x1="320" y1="156" x2="320" y2="262" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
-          <text x="326" y="210" fontSize="9" fill="#64748b">{t('구매가격차이', 'purchase var.')}</text>
-          <line x1="550" y1="156" x2="550" y2="262" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
-          <text x="556" y="210" fontSize="9" fill="#64748b">{t('생산차이', 'production var.')}</text>
-          <line x1="780" y1="156" x2="780" y2="262" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
-          <text x="786" y="210" fontSize="9" fill="#64748b">{t('매출 · 수량', 'revenue · qty')}</text>
+          <line x1="325" y1="206" x2="325" y2="298" stroke="#c4b5fd" strokeWidth="1.6" strokeDasharray="5 3" markerEnd="url(#arrG)" />
+          <text x="325" y="256" textAnchor="middle" fontSize="9.5" fill="#7c3aed">{t('구매가격 차이', 'price diff.')}</text>
+          <line x1="538" y1="206" x2="538" y2="298" stroke="#c4b5fd" strokeWidth="1.6" strokeDasharray="5 3" markerEnd="url(#arrG)" />
+          <text x="538" y="256" textAnchor="middle" fontSize="9.5" fill="#7c3aed">{t('생산 차이', 'prod. diff.')}</text>
+          <line x1="751" y1="206" x2="751" y2="298" stroke="#c4b5fd" strokeWidth="1.6" strokeDasharray="5 3" markerEnd="url(#arrG)" />
+          <text x="751" y="256" textAnchor="middle" fontSize="9.5" fill="#7c3aed">{t('매출 · 수량', 'revenue · qty')}</text>
 
           {/* CO band */}
-          {box(20, 262, 1018, 74, '#ede9fe', '#7c3aed')}
-          <text x="40" y="290" fontSize="13" fontWeight="800" fill="#5b21b6">📊 {t('CO 관리회계 (Controlling)', 'CO — Controlling')}</text>
-          <text x="40" y="314" fontSize="11" fill="#6d28d9">{t('표준원가 vs 실제원가 결산  →  제품 · 고객 수익성 분석 (내부 의사결정)', 'Standard vs actual costing  →  product · customer profitability (internal decisions)')}</text>
+          <rect x="20" y="300" width="1040" height="86" rx="18" fill="url(#gCO)" stroke="#8b5cf6" strokeWidth="1.5" filter="url(#soft)" />
+          <text x="44" y="336" fontSize="15" fontWeight="800" fill="#5b21b6">💡 {t('원가 관리 — 얼마 들여 얼마 남았나?', 'Cost Management — what it cost, what is left')}</text>
+          <text x="1036" y="334" textAnchor="end" fontSize="9.5" fill="#7c3aed" opacity="0.7">{t('CO 관리회계', 'CO Controlling')}</text>
+          <text x="44" y="362" fontSize="11.5" fill="#6d28d9">{t('표준원가와 실제원가를 비교하고, 제품·고객별로 남는 이익을 분석합니다.', 'Compare standard vs actual cost, and analyze profit by product and customer.')}</text>
 
           {/* CO -> FI */}
-          <line x1="529" y1="336" x2="529" y2="372" stroke="#94a3b8" strokeWidth="1.3" strokeDasharray="4 3" markerEnd="url(#arr)" />
-          <text x="535" y="358" fontSize="9" fill="#64748b">{t('원가 보정', 'cost adj.')}</text>
+          <line x1="540" y1="386" x2="540" y2="420" stroke="#94a3b8" strokeWidth="1.6" strokeDasharray="5 3" markerEnd="url(#arrG)" />
+          <text x="548" y="408" fontSize="9.5" fill="#64748b">{t('원가 반영', 'apply cost')}</text>
 
           {/* FI band */}
-          {box(20, 372, 1018, 74, '#e2e8f0', '#475569')}
-          <text x="40" y="400" fontSize="13" fontWeight="800" fill="#1e293b">📒 {t('FI 재무회계 (Financial Accounting)', 'FI — Financial Accounting')}</text>
-          <text x="40" y="424" fontSize="11" fill="#334155">{t('모든 거래를 회계장부에 자동 기록 — 복식부기 (차변 = 대변), 외부 보고', 'All transactions auto-posted to the ledger — double entry (Dr = Cr), external reporting')}</text>
+          <rect x="20" y="422" width="1040" height="86" rx="18" fill="url(#gFI)" stroke="#94a3b8" strokeWidth="1.5" filter="url(#soft)" />
+          <text x="44" y="458" fontSize="15" fontWeight="800" fill="#1e293b">📒 {t('회계 장부 — 모든 거래를 자동으로 기록', 'Accounting Ledger — every transaction auto-recorded')}</text>
+          <text x="1036" y="456" textAnchor="end" fontSize="9.5" fill="#475569" opacity="0.7">{t('FI 재무회계', 'FI Financials')}</text>
+          <text x="44" y="484" fontSize="11.5" fill="#334155">{t('위의 모든 활동이 장부에 자동으로 적힙니다 — 복식부기(차변 = 대변), 외부 보고용.', 'Every activity above is auto-posted — double entry (Dr = Cr), for external reporting.')}</text>
 
           {/* footer note */}
-          <text x="20" y="478" fontSize="10.5" fill="#64748b">{t('흐름: 마스터/BOM 정의  →  구매(P2P)  →  생산  →  판매(O2C).  그 위에서 CO가 원가를, FI가 회계를 담당합니다.', 'Flow: define Master/BOM  →  Procure (P2P)  →  Produce  →  Sell (O2C).  CO handles cost, FI handles accounting on top.')}</text>
-          <text x="20" y="500" fontSize="10.5" fill="#94a3b8">{t('* ABC Auto Parts(가상) 시나리오 기준', '* Based on ABC Auto Parts (fictitious) scenario')}</text>
+          <text x="22" y="538" fontSize="11" fill="#475569">{t('한눈에: 준비 → 사기 → 만들기 → 팔기 → 현금.  그 위에서 원가 관리가 이익을, 회계 장부가 기록을 책임집니다.', 'At a glance: Set up → Buy → Make → Sell → Cash. Above it, Cost Management tracks profit and the Ledger records everything.')}</text>
+          <text x="22" y="560" fontSize="10" fill="#94a3b8">{t('* ABC Auto Parts(가상) 시나리오 기준', '* Based on ABC Auto Parts (fictitious) scenario')}</text>
         </svg>
       </div>
     </div>

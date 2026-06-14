@@ -3850,6 +3850,49 @@ const RoleLaunchpad = ({ lang='ko', setActiveTab }) => {
     </div>
   );
 };
+/* 회계 모드 홈 — 빈 분개장 대신 5단계 결산 로드맵 (① 표준원가 → ⑤ CO-PA) */
+const ACCT_STEPS = [
+  { n:'1', tab:'master', icon:'🎯', title:{ko:'표준원가 설정',en:'Set standard cost'},        sap:'표준원가 계산·릴리즈', desc:{ko:'활동단가 → 반제품·완제품 표준원가를 계산·릴리즈합니다. 모든 거래 평가의 기준선이 됩니다.',en:'Activity rates → calculate & release SF/FG standard cost. The baseline for valuing every transaction.'} },
+  { n:'2', tab:'mm',     icon:'🔄', title:{ko:'월중 거래 입력',en:'Post period transactions'},  sap:'구매·생산·판매',     desc:{ko:'구매 입고 → 생산 → 판매 출고를 실행합니다. 표준가로 회계전표가 자동 생성되어 분개장이 채워집니다.',en:'Run purchase receipt → production → sales. Standard-price journals are auto-posted and fill the ledger.'} },
+  { n:'3', tab:'pp',     icon:'⚖️', title:{ko:'제조오더 정산',en:'Settle production orders'},  sap:'오더 정산',          desc:{ko:'표준 대비 실제 투입의 차이(생산차이)를 차이계정으로 분리합니다.',en:'Separate the actual-vs-standard input gap (production variance) into a variance account.'} },
+  { n:'4', tab:'fico',   icon:'📊', title:{ko:'실제원가 결산 (Material Ledger)',en:'Actual costing close (Material Ledger)'}, sap:'결산전기', desc:{ko:'차이를 재고·매출원가에 배부하고 결산전기합니다. 재고와 매출원가가 실제원가로 보정됩니다.',en:'Allocate variances to inventory & COGS and post closing. Inventory and COGS move to actual cost.'} },
+  { n:'5', tab:'copa',   icon:'📈', title:{ko:'CO-PA 수익성',en:'CO-PA profitability'},        sap:'수익성 분석',        desc:{ko:'제품·고객별 실제 마진을 분석합니다. CO 모듈의 최종 목적입니다.',en:'Analyze actual margin by product & customer — the final goal of the CO module.'} },
+];
+const AcctRoadmap = ({ lang='ko', setActiveTab }) => {
+  const ko = lang === 'ko';
+  return (
+    <div>
+      <div className="mb-3">
+        <h2 className="text-lg font-extrabold text-slate-800">{ko?'결산 로드맵 — 어디서부터 시작할까요?':'Close roadmap — where to begin?'}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">{ko?'분개장은 거래를 실행해야 채워집니다. 분개장이 아니라 ① 표준원가 설정부터 ⑤ CO-PA 수익성까지 순서대로 진행하세요.':'The ledger fills only after transactions run. Start not at the ledger, but at ① standard cost through to ⑤ CO-PA profitability.'}</p>
+      </div>
+      <ol className="space-y-0">
+        {ACCT_STEPS.map((s, i) => (
+          <li key={s.n} className="flex items-stretch gap-3">
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-bold text-sm flex items-center justify-center shrink-0">{s.n}</div>
+              {i < ACCT_STEPS.length - 1 && <div className="w-0.5 flex-1 bg-teal-200 my-1" />}
+            </div>
+            <div className="flex-1 rounded-xl border border-teal-200 bg-teal-50/50 p-3 mb-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{s.icon}</span>
+                  <span className="font-bold text-slate-800 text-sm">{ko?s.title.ko:s.title.en}</span>
+                  <span className="text-[10px] text-slate-400">{s.sap}</span>
+                </div>
+                <button onClick={() => setActiveTab(s.tab)} className="text-xs font-semibold text-teal-700 bg-white border border-teal-300 rounded-lg px-2.5 py-1 hover:bg-teal-100 transition-colors">{ko?'이동 →':'Go →'}</button>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">{ko?s.desc.ko:s.desc.en}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-2 text-xs text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+        💡 {ko?'①~②를 실행하면 분개장(전표)이 채워지고, ③~④에서 실제원가로 보정되며, ⑤에서 진짜 수익성이 보입니다.':'Steps ①–② fill the ledger, ③–④ adjust to actual cost, and ⑤ reveals true profitability.'}
+      </div>
+    </div>
+  );
+};
 const RoleGuide = ({ tab, lang='ko' }) => {
   const g = ROLE_GUIDE[tab];
   if (!g) return null;
@@ -4140,9 +4183,11 @@ function App() {
     { id:'copa',    label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
     { id:'costmodel', label:lang==='ko'?'원가모델 비교':'Costing Models', icon:'⚖️' },
     { id:'home_field', label:lang==='ko'?'홈':'Home', icon:'🏠' },
+    { id:'home_acct',  label:lang==='ko'?'시작 가이드':'Start Guide', icon:'🧭' },
   ];
 
   const TAB_GROUPS = [
+    { id:'grp_home_acct',label:lang==='ko'?'시작 가이드':'Start', icon:'🧭', tabIds:['home_acct'] },
     { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['flow','dryrun','script'] },
     { id:'grp_params',   label:'Intro',    icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
@@ -4195,7 +4240,7 @@ function App() {
                   {lang==='ko' ? '🧑‍🏭 현업' : '🧑‍🏭 Field'}
                 </button>
                 <button
-                  onClick={() => { setViewMode('accounting'); setActiveTab('ledger'); }}
+                  onClick={() => { setViewMode('accounting'); setActiveTab('home_acct'); }}
                   className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-teal-600 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
                   {lang==='ko' ? '🧮 회계' : '🧮 Accounting'}
                 </button>
@@ -4281,6 +4326,7 @@ function App() {
           </div>
         )}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
+        {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
         {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab} />}
         {unlocked && viewMode==='field' && activeTab!=='home_field' && <RoleGuide tab={activeTab} lang={lang} />}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}

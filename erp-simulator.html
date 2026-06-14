@@ -3549,11 +3549,259 @@ const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
 };
 
 /* =========================================================================
+   COST MODEL COMPARISON  —  Classic Standard Costing vs Material Ledger
+   Standalone educational module. Canonical KRW dataset (audit-report spec).
+   Toggle default = ML ON (company's live system reality).
+   ========================================================================= */
+const CostModelTab = ({ lang='ko' }) => {
+  const [mlOn, setMlOn] = useState(true); // default Material Ledger (company reality)
+  const ko = lang === 'ko';
+  const won = (v) => v.toLocaleString() + (ko ? '원' : ' KRW');
+
+  // Canonical 3-level dataset (audit-report spec, verified)
+  const mats = [
+    { code:'X', type:'RM', name: ko?'원재료 X':'Raw Mat. X',  std:1000, act:1100, stdVal:20000, actVal:22000, invDelta:2000, soldDelta:0,    reval:'F28', badge:'bg-green-100 text-green-700' },
+    { code:'Y', type:'SF', name: ko?'반제품 Y':'Semi-Fin. Y', std:2500, act:2800, stdVal:25000, actVal:28000, invDelta:3000, soldDelta:0,    reval:'F29', badge:'bg-amber-100 text-amber-700' },
+    { code:'Z', type:'FG', name: ko?'제품 Z':'Finished Z',    std:3500, act:3900, stdVal:35000, actVal:39000, invDelta:4000, soldDelta:8000, reval:'F30', badge:'bg-blue-100 text-blue-700' },
+  ];
+
+  // Concept comparison table
+  const rows = [
+    { k: ko?'월중 거래 평가':'In-period valuation',          c: ko?'표준가':'Standard',                       m: ko?'표준가 (동일)':'Standard (same)' },
+    { k: ko?'차이 누적처':'Variance accumulation',           c: ko?'즉시 손익 (PPV·F22)':'Immediate P/L (PPV·F22)', m: ko?'ML 차이계정':'ML difference acct' },
+    { k: ko?'월말 처리':'Period-end action',                c: ko?'재평가 없음':'No revaluation',             m: ko?'F28~F31 롤업 RM→SF→FG':'F28~F31 rollup RM→SF→FG' },
+    { k: ko?'차이 배부':'Variance allocation',              c: ko?'전액 당기손익':'All to current P/L',       m: ko?'재고분→B/S, 소비/판매분→COGS':'Inventory→B/S, sold→COGS' },
+    { k: ko?'제품(FG) 기말재고':'FG ending inventory',      c: ko?'표준가 유지 (35,000)':'Standard (35,000)', m: ko?'실제가 재평가 (39,000)':'Actual (39,000)' },
+    { k: ko?'감사 답변 "제품 재평가?"':'Audit: "revalue FG?"', c: ko?'아니오':'No',                          m: ko?'예':'Yes' },
+    { k: ko?'핵심 기능 (Fn)':'Key functions (Fn)',          c: 'F21·F22',                                     m: 'F28~F31 · F32' },
+    { k: ko?'SAP 설정':'SAP config',                       c: ko?'ML 비활성':'ML inactive',                  m: ko?'ML 활성 (S/4HANA 의무)':'ML active (S/4HANA mandatory)' },
+  ];
+
+  // Month-end FG closing journal, both models
+  const jClassic = {
+    title: ko?'클래식 — F22 오더 정산':'Classic — F22 Order Settlement',
+    lines: [
+      { t:'Dr', a: ko?'제조원가차이 (540000, P/L)':'Production variance (540000, P/L)', v:12000 },
+      { t:'Cr', a: ko?'제조오더 WIP (190000, B/S)':'Production order WIP (190000, B/S)', v:12000 },
+    ],
+    note: ko?'차이 12,000 전액 당기손익. 제품 재고 35,000(표준가) 불변.'
+        : 'Full 12,000 variance to P/L. FG inventory stays 35,000 (standard).',
+  };
+  const jMl = {
+    title: ko?'Material Ledger — F31 결산전기':'Material Ledger — F31 Post Closing',
+    lines: [
+      { t:'Dr', a: ko?'제품 재고 FG (130000, B/S)':'FG inventory (130000, B/S)', v:4000 },
+      { t:'Dr', a: ko?'매출원가 COGS (500000, P/L)':'COGS (500000, P/L)', v:8000 },
+      { t:'Cr', a: ko?'ML 차이계정':'ML difference acct', v:12000 },
+    ],
+    note: ko?'차이 12,000 = 재고분 4,000(→실제재고 39,000) + 판매분 8,000(→실제 COGS). 이중계상 아님 — 동일 차이를 재고/소비로 분할.'
+        : 'Variance 12,000 = inventory 4,000 (→actual 39,000) + sold 8,000 (→actual COGS). Not double counting — same variance split.',
+  };
+
+  const Journal = ({ j, active }) => (
+    <div className={`rounded-xl border p-4 transition-all ${active ? 'border-indigo-400 bg-indigo-50/40 ring-2 ring-indigo-200' : 'border-slate-200 bg-white opacity-60'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-xs font-semibold text-slate-700">{j.title}</h4>
+        {active && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white">{ko?'현재 모델':'Active'}</span>}
+      </div>
+      <div className="space-y-1">
+        {j.lines.map((l, i) => (
+          <div key={i} className={`flex justify-between text-xs font-mono px-2 py-1 rounded ${l.t==='Dr'?'bg-red-50 border-l-4 border-red-400':'bg-blue-50 border-l-4 border-blue-400'}`}>
+            <span><b className="mr-1">{l.t}:</b>{l.a}</span>
+            <span className="font-semibold">{won(l.v)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">💡 {j.note}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Header + Toggle */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-slate-800">
+            {ko ? '⚖️ 원가모델 비교 — 클래식 표준원가 vs Material Ledger' : '⚖️ Costing Models — Classic Standard Cost vs Material Ledger'}
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {ko
+              ? '같은 시나리오를 토글 하나로 두 세계관에서 마감 — 차이가 어디에 떨어지는지 비교합니다. (ML = Material Ledger, 자재원장)'
+              : 'Close the same scenario under two paradigms with one toggle — see where the variance lands. (ML = Material Ledger)'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 p-1.5 shrink-0">
+          <span className="text-[11px] text-slate-500 px-1">{ko?'원가모델':'Model'}</span>
+          <button onClick={() => setMlOn(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!mlOn ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+            {ko?'클래식 (ML OFF)':'Classic (ML OFF)'}
+          </button>
+          <button onClick={() => setMlOn(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${mlOn ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+            {ko?'Material Ledger (ON)':'Material Ledger (ON)'}
+          </button>
+        </div>
+      </div>
+
+      {/* Company reality badge */}
+      <div className={`rounded-lg border p-3 text-xs flex items-center gap-2 ${mlOn ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+        {mlOn
+          ? <span>🏭 <b>{ko?'현재 회사 운영 모델':'Company live model'}</b> — {ko?'본 시뮬레이터는 Material Ledger(자재원장) 기반 실제원가 마감을 사용합니다. FI/CO 탭의 F28~F31 결산이 이 모델입니다.':'This simulator runs Material Ledger actual costing. The FI/CO tab F28~F31 close implements this model.'}</span>
+          : <span>📘 <b>{ko?'보충 대조 (참고용)':'Supplementary contrast'}</b> — {ko?'ML을 사용하지 않는 클래식 표준원가 환경입니다. 첨부 감사보고서가 전제하는 모델로, 실제 회사 운영과는 다릅니다.':'Classic standard costing without ML — the model assumed by the audit report, not the company\'s actual operation.'}</span>}
+      </div>
+
+      {/* Concept comparison table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-700 text-white">
+              <th className="px-3 py-2 text-left font-semibold">{ko?'항목':'Aspect'}</th>
+              <th className={`px-3 py-2 text-left font-semibold ${!mlOn?'bg-slate-600':''}`}>{ko?'클래식 표준원가':'Classic Standard'}</th>
+              <th className={`px-3 py-2 text-left font-semibold ${mlOn?'bg-indigo-600':''}`}>Material Ledger (ML)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}>
+                <td className="px-3 py-1.5 font-medium text-slate-600">{r.k}</td>
+                <td className={`px-3 py-1.5 text-slate-700 ${!mlOn?'font-semibold':''}`}>{r.c}</td>
+                <td className={`px-3 py-1.5 text-slate-700 ${mlOn?'font-semibold text-indigo-700':''}`}>{r.m}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 3-level cards */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">{ko?'동일 시나리오, 두 결과 (기말재고)':'Same scenario, two outcomes (ending inventory)'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {mats.map(mt => {
+            const isFG = mt.type === 'FG';
+            return (
+              <div key={mt.code} className={`rounded-xl border-2 p-4 transition-all ${mlOn ? 'border-green-300 bg-green-50/40' : (isFG ? 'border-orange-300 bg-orange-50/40' : 'border-slate-200 bg-white')}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-mono ${mt.badge}`}>{mt.type}</span>
+                  <span className="text-sm font-bold text-slate-800">{mt.name}</span>
+                </div>
+                <div className="text-center space-y-1">
+                  <div className="text-[11px] text-slate-400">{ko?'표준가':'Standard'}</div>
+                  <div className="text-sm font-mono text-slate-600">{won(mt.std)}/{isFG||mt.type==='SF'?'EA':'kg'}</div>
+                  <div className="text-slate-300">↓</div>
+                  <div className="text-[11px] text-slate-400">{mlOn?(ko?'실제가':'Actual'):(ko?'표준가 유지':'Stays standard')}</div>
+                  <div className={`text-base font-mono font-bold ${mlOn?'text-green-700':'text-slate-700'}`}>{won(mlOn?mt.act:mt.std)}/{isFG||mt.type==='SF'?'EA':'kg'}</div>
+                  <div className="text-slate-300">↓</div>
+                  <div className={`text-sm font-semibold ${mlOn?'text-green-700':'text-orange-600'}`}>
+                    {mlOn ? `✅ ${ko?'재평가':'Revalued'} (${mt.reval})` : `❌ ${ko?'미재평가':'Not revalued'}`}
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-200/60 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-slate-500">{ko?'기말재고':'Ending inv.'}</span><span className="font-semibold">{won(mlOn?mt.actVal:mt.stdVal)}</span></div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">{ko?'차이 행선지':'Variance to'}</span>
+                    <span className={`font-semibold ${mlOn?'text-blue-600':'text-red-600'}`}>
+                      {mlOn ? (isFG ? (ko?'재고 4,000→B/S · 8,000→COGS':'4,000→B/S · 8,000→COGS') : `${won(mt.invDelta)}→B/S`) : (ko?'전액→P/L':'all→P/L')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+          {ko
+            ? '※ 제품 Z 실제원가 3,900원/EA는 두 모델 모두 동일한 사실입니다. 차이 12,000원이 어디에 떨어지느냐(클래식=전액 P/L · ML=재고 4,000+COGS 8,000)만 다릅니다.'
+            : '※ FG Z actual cost 3,900/EA is the same fact in both models. Only where the 12,000 variance lands differs (Classic = all P/L · ML = inventory 4,000 + COGS 8,000).'}
+        </p>
+      </div>
+
+      {/* Month-end FG closing journal comparison */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">{ko?'제품(FG) 월말 마감 전표 비교':'FG month-end closing journal — both models'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Journal j={jClassic} active={!mlOn} />
+          <Journal j={jMl} active={mlOn} />
+        </div>
+      </div>
+
+      {/* Auditor Q&A interactive panel */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg">🕵️</span>
+          <h3 className="text-sm font-semibold text-slate-700">{ko?'내부감사인 Q&A':'Internal Auditor Q&A'}</h3>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-3 mb-3 text-sm text-slate-700 font-medium">
+          ❓ {ko?'"제품(FG)도 월말에 실제원가로 재평가하나요?"':'"Do you revalue finished goods (FG) to actual cost at month-end?"'}
+        </div>
+        {mlOn ? (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-700 space-y-1.5">
+            <p className="font-semibold text-indigo-700">✅ {ko?'예 — Material Ledger를 사용하므로 재평가합니다 (현재 회사 모델).':'Yes — we use Material Ledger, so we do revalue (current company model).'}</p>
+            <p>{ko?'· 기말 F30 다중레벨 롤업이 RM→SF→FG로 실제원가를 전파, FG 기말재고도 실제원가(39,000)로 재평가됩니다.':'· Period-end F30 multi-level rollup propagates actual cost RM→SF→FG; FG ending inventory is revalued to actual (39,000).'}</p>
+            <p>{ko?'· 차이 12,000은 재고분 4,000(B/S)과 판매분 8,000(COGS)으로 분할 배부되어 이중계상이 아닙니다.':'· The 12,000 variance is split into inventory 4,000 (B/S) and sold 8,000 (COGS) — not double counting.'}</p>
+            <p>{ko?'· 증빙: 원가구성 조회 리포트, F31 결산전기 전표 No.31, F32 실제마진.':'· Evidence: cost-component report, F31 Post Closing doc No.31, F32 actual margin.'}</p>
+          </div>
+        ) : (
+          <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 space-y-1.5">
+            <p className="font-semibold text-slate-700">❌ {ko?'아니오 — ML 미사용 클래식 환경에서는 재평가 불필요 (감사보고서 전제).':'No — in a classic non-ML environment, no revaluation needed (audit-report premise).'}</p>
+            <p>{ko?'· 근거 1: 제품은 최종 산출물 — 후속 공정에 투입되지 않아 재고왜곡 전파 경로가 없습니다.':'· Reason 1: FG is the final output — no downstream consumption, so no distortion to propagate.'}</p>
+            <p>{ko?'· 근거 2: 표준 vs 실제 차이는 F22 오더 정산으로 이미 P/L(540000)에 분리 인식됩니다.':'· Reason 2: Std vs actual variance is already separated to P/L (540000) via F22 order settlement.'}</p>
+            <p>{ko?'· 근거 3: 재고 재평가 시 동일 차이의 이중계상(Double Counting) 위험 — 증빙: 12,000원 차이가 540000 계정에 이미 반영.':'· Reason 3: Revaluing inventory risks double counting the same variance — evidence: 12,000 already in account 540000.'}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Contradiction callout — the spec's hybrid */}
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <h3 className="text-sm font-semibold text-amber-800 mb-1.5">⚠️ {ko?'감사보고서 "하이브리드" 입장의 논리적 한계':'Logical limit of the audit report\'s "hybrid" stance'}</h3>
+        <p className="text-xs text-amber-800 leading-relaxed">
+          {ko
+            ? '첨부 감사보고서는 원재료·반제품은 실제원가로 재평가(수동 가격변경)하면서 제품만 재평가하지 않는 중간 입장을 취합니다. 그러나 RM·SF 기말재고를 실제원가로 보정하기로 했다면(=재고 정확성·하위왜곡 방지를 인정했다면), 같은 논리로 FG 기말재고도 보정해야 합니다. FG만 표준가로 두는 "순수 클래식"이거나, 셋 다 일관되게 보정하는 "Material Ledger"이거나 — 둘 중 하나가 일관됩니다. ML은 RM→SF→FG 전 레벨을 하나의 마감(F28~F31)으로 일관되게 풀어, 이 모순 자체를 제거합니다.'
+            : 'The audit report revalues raw and semi-finished materials to actual (manual price change) but not finished goods. Yet if you accept revaluing RM·SF ending inventory (i.e., inventory accuracy and downstream distortion matter), the same logic demands revaluing FG too. Either "pure classic" (nothing revalued) or "Material Ledger" (all levels revalued consistently) is internally consistent. ML resolves RM→SF→FG in one period-end run (F28~F31), eliminating the contradiction.'}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   ROLE GUIDE STRIP  —  현업 모드 전용. 탭이 여러 역할을 혼재하므로,
+   각 탭에서 "내 업무가 어디까지인지"를 안내한다. (스텝 필터링 없음)
+   ========================================================================= */
+const ROLE_GUIDE = {
+  mm:   { icon:'🛒', role:{ko:'구매 담당자',en:'Buyer'},
+          mine:{ko:'PO생성 → 입고(101) → 송장검증',en:'Create PO → GR(101) → Invoice Verify'},
+          others:{ko:'대금지급은 🏦자금 · 실사/반품은 📦창고 업무',en:'Payment = 🏦Treasury · Stock count/returns = 📦Warehouse'} },
+  pp:   { icon:'🏭', role:{ko:'생산 담당자',en:'Production'},
+          mine:{ko:'생산오더 → 출고(261) → 생산확정 → 입고(101)',en:'Prod. Order → GI(261) → Confirm → GR(101)'},
+          others:{ko:'오더정산은 🧮원가·결산 업무',en:'Order settlement = 🧮Costing & Close'} },
+  sd:   { icon:'💵', role:{ko:'영업 담당자',en:'Sales'},
+          mine:{ko:'판매오더 → 출하(GI) → 청구',en:'Sales Order → Delivery(GI) → Billing'},
+          others:{ko:'대금수취는 🏦자금 · 반품/대변메모는 📦창고 업무',en:'Receipt = 🏦Treasury · Returns/credit memo = 📦Warehouse'} },
+  fico: { icon:'📊', role:{ko:'원가·결산 담당자',en:'Costing & Close'},
+          mine:{ko:'표준원가 계산·릴리즈 = 원가 / ML·결산전기·CO-PA = 결산',en:'Std cost calc·release = Costing / ML·Post Closing·CO-PA = Close'},
+          others:{ko:'생산오더정산은 🏭생산 탭에서 실행',en:'Order settlement is executed in 🏭Production tab'} },
+};
+const RoleGuide = ({ tab, lang='ko' }) => {
+  const g = ROLE_GUIDE[tab];
+  if (!g) return null;
+  const ko = lang === 'ko';
+  return (
+    <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      <span className="font-semibold text-indigo-700">{g.icon} {ko?g.role.ko:g.role.en} {ko?'업무':'tasks'}</span>
+      <span className="text-slate-700">{ko?g.mine.ko:g.mine.en}</span>
+      <span className="text-slate-400">｜</span>
+      <span className="text-slate-500">{ko?g.others.ko:g.others.en}</span>
+    </div>
+  );
+};
+
+/* =========================================================================
    APP (GLOBAL STATE + DATA LINKAGE)
    ========================================================================= */
 function App() {
   const [activeTab, setActiveTab] = useState('master');
   const [lang, setLang] = useState('ko'); // 'ko' | 'en'
+  const [viewMode, setViewMode] = useState('field'); // 'field' (현업 역할별) | 'accounting' (회계 모듈별)
   const [materials, setMaterials] = useState(DEFAULT_MATERIALS);
   const [simParams, setSimParams] = useState(DEFAULT_PARAMS);
   const [showPopup, setShowPopup] = useState(false);
@@ -3821,6 +4069,7 @@ function App() {
     { id:'flow',    label:'Flow',       icon:'🔀' },
     { id:'script',  label:lang==='ko'?'시나리오':'Script', icon:'📝' },
     { id:'copa',    label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
+    { id:'costmodel', label:lang==='ko'?'원가모델 비교':'Costing Models', icon:'⚖️' },
   ];
 
   const TAB_GROUPS = [
@@ -3828,10 +4077,20 @@ function App() {
     { id:'grp_params',   label:'Intro',    icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
-    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa'] },
+    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa','costmodel'] },
     { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger'] },
   ];
-  const activeGroup = TAB_GROUPS.find(g => g.tabIds.includes(activeTab)) || TAB_GROUPS[0];
+  // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
+  const ROLE_GROUPS = [
+    { id:'role_master',  label:lang==='ko'?'마스터':'Master',     icon:'🗂️', tabIds:['master'] },
+    { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
+    { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
+    { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
+    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','copa','ledger'] },
+    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
+  ];
+  const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
+  const activeGroup = NAV_GROUPS.find(g => g.tabIds.includes(activeTab)) || NAV_GROUPS[0];
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
 
   return (
@@ -3856,6 +4115,20 @@ function App() {
               >
                 {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
               </button>
+              <div className="w-px h-5 bg-white/15 mx-0.5" />
+              {/* View Mode: 현업(Field) vs 회계(Accounting) */}
+              <div className="flex items-center rounded-full border border-slate-500 overflow-hidden text-xs font-semibold">
+                <button
+                  onClick={() => setViewMode('field')}
+                  className={`px-3 py-1 transition-colors ${viewMode==='field' ? 'bg-indigo-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
+                  {lang==='ko' ? '🧑‍🏭 현업' : '🧑‍🏭 Field'}
+                </button>
+                <button
+                  onClick={() => setViewMode('accounting')}
+                  className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-indigo-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
+                  {lang==='ko' ? '🧮 회계' : '🧮 Accounting'}
+                </button>
+              </div>
               <div className="w-px h-5 bg-white/15 mx-0.5" />
               {/* Tour (separate) */}
               <IntroButton lang={lang} />
@@ -3893,7 +4166,7 @@ function App() {
           </div>
           {/* Group Nav (Top Level) */}
           <nav className="flex gap-1 mt-2">
-            {TAB_GROUPS.map(g => (
+            {NAV_GROUPS.map(g => (
               <button key={g.id}
                 onClick={() => unlocked && setActiveTab(g.tabIds[0])}
                 disabled={!unlocked}
@@ -3936,6 +4209,7 @@ function App() {
             </p>
           </div>
         )}
+        {unlocked && viewMode==='field' && <RoleGuide tab={activeTab} lang={lang} />}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} simParams={simParams} lang={lang} />}
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} simParams={simParams} materials={materials} />}
@@ -3947,6 +4221,7 @@ function App() {
         {activeTab==='flow' && <FlowTab lang={lang} />}
         {activeTab==='script' && <ScriptTab lang={lang} />}
         {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
+        {activeTab==='costmodel' && <CostModelTab lang={lang} />}
       </main>
 
       <footer className="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-slate-400">

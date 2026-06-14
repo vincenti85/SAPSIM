@@ -3796,6 +3796,60 @@ const ROLE_GUIDE = {
           mine:{ko:'표준원가 계산·릴리즈 = 원가 / ML·결산전기·CO-PA = 결산',en:'Std cost calc·release = Costing / ML·Post Closing·CO-PA = Close'},
           others:{ko:'생산오더정산은 🏭생산 탭에서 실행',en:'Order settlement is executed in 🏭Production tab'} },
 };
+/* =========================================================================
+   MODE BANNER + ROLE LAUNCHPAD  —  make 현업/회계 modes visibly distinct.
+   현업 = role-tile home (task-first) · 회계 = module/journal home (data-first)
+   ========================================================================= */
+const ModeBanner = ({ viewMode, lang='ko' }) => {
+  const ko = lang === 'ko';
+  if (viewMode === 'field') return (
+    <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-bold text-indigo-700">🧑‍🏭 {ko?'현업 모드':'Field mode'}</span>
+      <span className="text-indigo-700/75">{ko?'역할별로 내 업무만 빠르게. 전체 회계·전표는 우측 상단 ‘회계’로 전환하세요.':'Role-first — just your tasks. Switch to ‘Accounting’ (top-right) for the full ledger view.'}</span>
+    </div>
+  );
+  return (
+    <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-bold text-teal-700">🧮 {ko?'회계 모드':'Accounting mode'}</span>
+      <span className="text-teal-700/75">{ko?'모듈·전표·결산을 한 곳에서 전체로. 역할별 빠른 시작은 ‘현업’으로 전환하세요.':'Full module / journal / close view. Switch to ‘Field’ for role-based quick start.'}</span>
+    </div>
+  );
+};
+const ROLE_TILES = [
+  { tab:'master', icon:'🗂️', cls:'border-emerald-200 bg-emerald-50 hover:border-emerald-400', title:{ko:'마스터',en:'Master'},          sap:'마스터·BOM', desc:{ko:'자재·BOM·표준원가를 등록·관리해요',en:'Register materials, BOM, standard cost'} },
+  { tab:'mm',     icon:'🛒', cls:'border-blue-200 bg-blue-50 hover:border-blue-400',         title:{ko:'구매 (사오기)',en:'Buy'},        sap:'구매·MM',   desc:{ko:'발주 → 입고 → 송장 → 지급',en:'PO → receipt → invoice → pay'} },
+  { tab:'pp',     icon:'🏭', cls:'border-amber-200 bg-amber-50 hover:border-amber-400',       title:{ko:'생산 (만들기)',en:'Make'},       sap:'생산·PP',   desc:{ko:'생산오더 → 출고 → 확정 → 입고',en:'Order → issue → confirm → receipt'} },
+  { tab:'sd',     icon:'💵', cls:'border-rose-200 bg-rose-50 hover:border-rose-400',         title:{ko:'영업 (팔기)',en:'Sell'},         sap:'영업·SD',   desc:{ko:'판매오더 → 출하 → 청구 → 수금',en:'Order → delivery → billing → collect'} },
+  { tab:'fico',   icon:'📊', cls:'border-violet-200 bg-violet-50 hover:border-violet-400',   title:{ko:'원가·결산',en:'Costing & Close'},sap:'원가·CO',   desc:{ko:'표준원가 · 실제원가 결산 · 수익성',en:'Standard cost · actual close · profit'} },
+  { tab:'flow',   icon:'🗺️', cls:'border-slate-200 bg-slate-50 hover:border-slate-400',       title:{ko:'가이드',en:'Guide'},            sap:'학습·투어', desc:{ko:'전체 흐름 · 시나리오 · 변수입력',en:'Big picture · scenario · variables'} },
+];
+const RoleLaunchpad = ({ lang='ko', setActiveTab }) => {
+  const ko = lang === 'ko';
+  return (
+    <div>
+      <div className="mb-4">
+        <h2 className="text-lg font-extrabold text-slate-800">{ko?'무슨 일을 하시나요? 역할을 선택하세요':'What do you do? Pick your role'}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">{ko?'내 업무 카드를 누르면 바로 시작합니다. (현업 모드 홈)':'Tap your task card to start. (Field-mode home)'}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {ROLE_TILES.map(r => (
+          <button key={r.tab} onClick={() => setActiveTab(r.tab)}
+            className={`text-left rounded-xl border-2 p-4 transition-all hover:shadow-md ${r.cls}`}>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">{r.icon}</span>
+              <div>
+                <div className="text-base font-bold text-slate-800">{ko?r.title.ko:r.title.en}</div>
+                <div className="text-[10px] text-slate-400">{r.sap}</div>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">{ko?r.desc.ko:r.desc.en}</p>
+            <div className="mt-2 text-xs font-semibold text-indigo-600">{ko?'바로가기 →':'Open →'}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 const RoleGuide = ({ tab, lang='ko' }) => {
   const g = ROLE_GUIDE[tab];
   if (!g) return null;
@@ -3814,7 +3868,7 @@ const RoleGuide = ({ tab, lang='ko' }) => {
    APP (GLOBAL STATE + DATA LINKAGE)
    ========================================================================= */
 function App() {
-  const [activeTab, setActiveTab] = useState('master');
+  const [activeTab, setActiveTab] = useState('home_field');
   const [lang, setLang] = useState('ko'); // 'ko' | 'en'
   const [viewMode, setViewMode] = useState('field'); // 'field' (현업 역할별) | 'accounting' (회계 모듈별)
   const [materials, setMaterials] = useState(DEFAULT_MATERIALS);
@@ -4085,6 +4139,7 @@ function App() {
     { id:'script',  label:lang==='ko'?'시나리오':'Script', icon:'📝' },
     { id:'copa',    label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
     { id:'costmodel', label:lang==='ko'?'원가모델 비교':'Costing Models', icon:'⚖️' },
+    { id:'home_field', label:lang==='ko'?'홈':'Home', icon:'🏠' },
   ];
 
   const TAB_GROUPS = [
@@ -4097,6 +4152,7 @@ function App() {
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
   const ROLE_GROUPS = [
+    { id:'role_home',    label:lang==='ko'?'홈':'Home',           icon:'🏠', tabIds:['home_field'] },
     { id:'role_master',  label:lang==='ko'?'마스터':'Master',     icon:'🗂️', tabIds:['master'] },
     { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
@@ -4134,13 +4190,13 @@ function App() {
               {/* View Mode: 현업(Field) vs 회계(Accounting) */}
               <div className="flex items-center rounded-full border border-slate-500 overflow-hidden text-xs font-semibold">
                 <button
-                  onClick={() => setViewMode('field')}
+                  onClick={() => { setViewMode('field'); setActiveTab('home_field'); }}
                   className={`px-3 py-1 transition-colors ${viewMode==='field' ? 'bg-indigo-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
                   {lang==='ko' ? '🧑‍🏭 현업' : '🧑‍🏭 Field'}
                 </button>
                 <button
-                  onClick={() => setViewMode('accounting')}
-                  className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-indigo-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
+                  onClick={() => { setViewMode('accounting'); setActiveTab('ledger'); }}
+                  className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-teal-600 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
                   {lang==='ko' ? '🧮 회계' : '🧮 Accounting'}
                 </button>
               </div>
@@ -4189,7 +4245,7 @@ function App() {
                   ${g.id==='grp_ledger' ? 'text-[0.825rem]' : 'text-xs'}
                   ${!unlocked ? 'opacity-40 cursor-not-allowed' : ''}
                   ${activeGroup.id===g.id && unlocked
-                    ? 'bg-indigo-500 text-white shadow-sm'
+                    ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
                     : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'}`}>
                 {g.icon} {g.label}
               </button>
@@ -4224,7 +4280,9 @@ function App() {
             </p>
           </div>
         )}
-        {unlocked && viewMode==='field' && <RoleGuide tab={activeTab} lang={lang} />}
+        {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
+        {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab} />}
+        {unlocked && viewMode==='field' && activeTab!=='home_field' && <RoleGuide tab={activeTab} lang={lang} />}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} simParams={simParams} lang={lang} />}
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} simParams={simParams} materials={materials} />}

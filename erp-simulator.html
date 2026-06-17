@@ -4,12 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ERP Process Learning Simulator — ABC Auto Parts Inc.</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<!-- Pin Babel to 7.x: Babel 8 flips preset-react to the automatic JSX runtime,
-     which injects `import "react/jsx-runtime"` and breaks the in-browser classic-script transform. -->
-<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<!-- Babel 8 injects `import "react/jsx-runtime"` which breaks classic-script mode; stay on 7.x -->
+<script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <style>
   .border-l-3 { border-left-width: 3px; }
   body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }

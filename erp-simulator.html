@@ -1404,7 +1404,7 @@ const SD_GUIDE = [
    JOURNAL POPUP
    ========================================================================= */
 /* =========================================================================
-   INTRODUCTION TOUR (15s auto-play, no PIN required)
+   INTRODUCTION TOUR (40s auto-play, no PIN required)
    Self-contained motion walkthrough of the whole site structure.
    ========================================================================= */
 const TOUR_SCENES = [
@@ -1412,6 +1412,10 @@ const TOUR_SCENES = [
     ko:{ tag:'INTRO', t:'ERP 프로세스 학습 시뮬레이터', d:'구매 → 생산 → 원가 → 매출 엔드투엔드 실습' },
     en:{ tag:'INTRO', t:'ERP Process Learning Simulator', d:'End-to-end: Procurement to Profitability' },
     chips:{ ko:['구매','생산','원가','매출'], en:['Procurement','Production','Costing','Sales'] } },
+  { icon:'🧑‍🏭', accent:'from-indigo-500 to-indigo-800',
+    ko:{ tag:'DUAL VIEW', t:'현업 모드 vs 회계 모드', d:'역할별 빠른 실행(현업) ↔ 모듈·전표 전체 뷰(회계), 언제든 전환' },
+    en:{ tag:'DUAL VIEW', t:'Field Mode vs Accounting Mode', d:'Role-first quick tasks (Field) ↔ full module/journal view (Accounting) — switch anytime' },
+    chips:{ ko:['🧑‍🏭 현업','🧮 회계'], en:['🧑‍🏭 Field','🧮 Accounting'] } },
   { icon:'📋', accent:'from-emerald-500 to-teal-700',
     ko:{ tag:'STEP 1', t:'마스터 데이터 & BOM', d:'멀티레벨 BOM 원가 롤업 (RM → SF → FG)' },
     en:{ tag:'STEP 1', t:'Master Data & BOM', d:'Multi-level BOM cost rollup (RM → SF → FG)' },
@@ -1428,19 +1432,27 @@ const TOUR_SCENES = [
     ko:{ tag:'STEP 4', t:'원가 결산', d:'표준원가 → 실제원가 결산 → 수익성 분석' },
     en:{ tag:'STEP 4', t:'Costing', d:'Standard → Actual costing → Profitability' },
     chips:{ ko:['표준원가','실제원가','수익성분석'], en:['Std Cost','Actual Cost','Profitability'] } },
+  { icon:'🧾', accent:'from-fuchsia-500 to-purple-800',
+    ko:{ tag:'STEP 4.5 · NEW', t:'일반경비 (SG&A)', d:'원가센터 발생 → 배분(Assessment) → 손익 반영' },
+    en:{ tag:'STEP 4.5 · NEW', t:'General/Overhead Expense', d:'Cost center accrual → assessment → P&L impact' },
+    chips:{ ko:['발생전표','원가센터 조회','배분','손익 반영'], en:['Accrual','CC Report','Assessment','P&L'] } },
   { icon:'💰', accent:'from-rose-500 to-pink-700',
     ko:{ tag:'STEP 5', t:'매출', d:'판매오더부터 대금 수취까지' },
     en:{ tag:'STEP 5', t:'Sales', d:'From sales order to cash receipt' },
     chips:{ ko:['판매오더','출하','청구','수취'], en:['Order','Delivery','Billing','Receipt'] } },
+  { icon:'🧭', accent:'from-cyan-600 to-blue-800',
+    ko:{ tag:'GUIDE', t:'진행 스테퍼 & 다음 할 일', d:'헤더의 전역 진행률과 역할 카드의 "다음 할 일" 배지로 길을 잃지 않아요' },
+    en:{ tag:'GUIDE', t:'Progress Stepper & Next Task', d:'The header progress bar and role-card "Up next" badge keep you on track' },
+    chips:{ ko:['진행 n/총계','👉 다음','🧰 학습 도구'], en:['n/total progress','👉 Next','🧰 Learning Tools'] } },
   { icon:'📒', accent:'from-slate-600 to-slate-800',
-    ko:{ tag:'REFERENCE', t:'분개 원장 & 기능 맵', d:'실시간 분개 + 기능번호 F01~F32 / 표준 ERP 프로세스 매핑 참조' },
-    en:{ tag:'REFERENCE', t:'Journal Ledger & Function Map', d:'Live journals + F01~F32 / standard ERP process reference' },
-    chips:{ ko:['실시간 분개','기능번호 F01~F32','ERP 매핑 참조'], en:['Live journals','F01~F32','ERP reference'] } },
+    ko:{ tag:'REFERENCE', t:'분개 원장 & 기능 맵', d:'실시간 분개 + 기능번호 F01~F36 / 표준 ERP 프로세스 매핑 참조' },
+    en:{ tag:'REFERENCE', t:'Journal Ledger & Function Map', d:'Live journals + F01~F36 / standard ERP process reference' },
+    chips:{ ko:['실시간 분개','기능번호 F01~F36','ERP 매핑 참조'], en:['Live journals','F01~F36','ERP reference'] } },
 ];
 const IntroTour = ({ lang, onClose }) => {
   const ko = lang === 'ko';
   const N = TOUR_SCENES.length;
-  const per = 15000 / N; // ~2143ms per scene -> 15s total
+  const per = 40000 / N; // 10 scenes -> 4000ms each -> 40s total
   const [idx, setIdx] = useState(0);
   const [done, setDone] = useState(false);
   const timer = useRef(null);
@@ -1505,7 +1517,7 @@ const IntroTour = ({ lang, onClose }) => {
             <span className="block h-full bg-indigo-400 rounded-full" style={{ width: pct + '%' }} />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">🎬 {ko ? '소개 둘러보기 · 15초' : 'Introduction Tour · 15s'}</span>
+            <span className="text-[11px] text-slate-400">🎬 {ko ? '소개 둘러보기 · 40초' : 'Introduction Tour · 40s'}</span>
             <div className="flex gap-2">
               <button onClick={replay} className="text-xs text-slate-300 hover:text-white px-2 py-1 rounded transition-colors">↻ {ko ? '처음부터' : 'Restart'}</button>
               <button onClick={onClose} className="text-xs text-slate-300 hover:text-white px-2 py-1 rounded transition-colors">✕ {ko ? '닫기' : 'Close'}</button>
@@ -1523,7 +1535,7 @@ const IntroButton = ({ lang, cta }) => {
       {cta ? (
         <button onClick={() => setOpen(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-500 text-white text-sm font-bold shadow-lg hover:bg-indigo-400 transition-colors animate-pulse">
-          🎬 {lang === 'ko' ? '둘러보기 (15초 소개)' : 'Take the Tour (15s Intro)'}
+          🎬 {lang === 'ko' ? '둘러보기 (40초 소개)' : 'Take the Tour (40s Intro)'}
         </button>
       ) : (
         <button onClick={() => setOpen(true)}

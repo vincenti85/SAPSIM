@@ -4661,8 +4661,8 @@ function App() {
             <ScenarioProgress ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps}
               activeTab={activeTab} setActiveTab={setActiveTab} lang={lang} />
           )}
-          {/* Group Nav (Top Level) */}
-          <nav className="flex gap-1 mt-2">
+          {/* Group Nav (Top Level) — mobile only; sm and up uses the left sidebar instead */}
+          <nav className="flex gap-1 mt-2 sm:hidden">
             {NAV_GROUPS.map(g => (
               <button key={g.id}
                 onClick={() => unlocked && setActiveTab(g.tabIds[0])}
@@ -4690,7 +4690,28 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-5 relative">
+      <div className="max-w-7xl mx-auto px-4 flex gap-4 items-start">
+        {/* Left slim sidebar (Group Nav) — sm and up only; mobile keeps the horizontal nav in the header */}
+        <aside className="hidden sm:block w-24 shrink-0 py-5">
+          <nav className="flex flex-col gap-1 sticky top-4">
+            {NAV_GROUPS.map(g => (
+              <button key={g.id}
+                onClick={() => unlocked && setActiveTab(g.tabIds[0])}
+                disabled={!unlocked}
+                title={g.label}
+                className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-lg text-center transition-all
+                  ${!unlocked ? 'opacity-40 cursor-not-allowed' : ''}
+                  ${activeGroup.id===g.id && unlocked
+                    ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
+                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-400 hover:text-slate-800'}`}>
+                <span className="text-lg leading-none">{g.icon}</span>
+                <span className="text-[9px] font-semibold leading-tight">{g.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+      <main className="flex-1 min-w-0 py-5 relative">
         {!unlocked && (
           <div className="absolute inset-0 bg-slate-100/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-lg" style={{minHeight:'300px'}}>
             <div className="text-6xl mb-4">🔐</div>
@@ -4725,6 +4746,7 @@ function App() {
         {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
         {activeTab==='costmodel' && <CostModelTab lang={lang} />}
       </main>
+      </div>
 
       <footer className="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-slate-400">
         ERP Process Learning Simulator (ECC-style FI/CO) · Vendor {VENDOR.code} ({VENDOR.name}) · Customer {CUSTOMER.code} ({CUSTOMER.name})

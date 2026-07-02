@@ -268,6 +268,22 @@ const T = {
     ficoFlow2: '🏭 PP SF 차이: +$467.50 (불리) → SF001 → FG001 롤업',
     ficoFlow3: '🏭 PP FG 차이: -$30.00 (유리) → FG001 자체 차이',
     ficoFlow4: '📊 최종 COGS 조정: +$101.875 (불리) → 실제마진 56.4%',
+    overheadGuideTitle: '일반경비 처리 운용 가이드',
+    overheadCardTitle: '🧾 일반경비 (원가센터 발생·배분)',
+    overheadDesc: 'SG&A성 간접비를 원가센터에 발생시키고, 원가센터 Pool을 CO-PA 세그먼트로 배분한 뒤 손익에 반영합니다.',
+    btnFB50: '일반경비 발생 전표 입력',
+    btnKSB1: '원가센터 발생 현황 조회',
+    btnKSU5: '원가센터 배분(Assessment) 실행',
+    btnKE30: '손익·CO-PA 반영 확인',
+    overheadCCTitle: '원가센터 Pool 현황',
+    overheadCCCol: '원가센터',
+    overheadCCDesc: '설명',
+    overheadCCAmt: '누적 발생액',
+    overheadPLTitle: '손익 반영 (배분 후)',
+    overheadPLRevenue: '매출액',
+    overheadPLCOGS: '매출원가',
+    overheadPLSGA: '일반관리비(SG&A)',
+    overheadPLOP: '영업이익',
     sdScenTitle: 'SD 매출 시나리오',
     sdScenDesc: 'Customer C001 (Northstar Motors Inc.) 에게 FG001 5EA @ $150 판매 (총 $750).',
     btnVA01: 'Sales Order 생성',
@@ -445,6 +461,22 @@ const T = {
     ficoFlow2: '🏭 PP SF Variance: +$467.50 (Unfavorable) → Rolled up SF001 → FG001',
     ficoFlow3: '🏭 PP FG Variance: -$30.00 (Favorable) → FG001 own variance',
     ficoFlow4: '📊 Final COGS Adjustment: +$101.875 (Unfavorable) → Actual margin 56.4%',
+    overheadGuideTitle: 'General/Overhead Expense Operation Guide',
+    overheadCardTitle: '🧾 General/Overhead Expense (Cost Center Accrual & Assessment)',
+    overheadDesc: 'Post SG&A-type overhead to cost centers, assess the cost center pool to a CO-PA segment, then reflect it in the P&L.',
+    btnFB50: 'Post General Expense Accrual',
+    btnKSB1: 'Cost Center Line-Item Report',
+    btnKSU5: 'Run Cost Center Assessment',
+    btnKE30: 'Confirm P&L / CO-PA Impact',
+    overheadCCTitle: 'Cost Center Pool Status',
+    overheadCCCol: 'Cost Center',
+    overheadCCDesc: 'Description',
+    overheadCCAmt: 'Accrued Amount',
+    overheadPLTitle: 'P&L Impact (Post-Assessment)',
+    overheadPLRevenue: 'Revenue',
+    overheadPLCOGS: 'COGS',
+    overheadPLSGA: 'SG&A Expense',
+    overheadPLOP: 'Operating Profit',
     sdScenTitle: 'SD Sales Scenario',
     sdScenDesc: 'Sell FG001 5EA @ $150 to Customer C001 (Northstar Motors Inc.) (Total $750).',
     btnVA01: 'Create Sales Order',
@@ -897,6 +929,55 @@ function buildJournals(p, mats, lang) {
       ], note:`Revalue SF001 inventory from old std price ($${hStd.toFixed(2)}) to new std price ($${((hGI+hActivity)/ppH.outQty).toFixed(3)}).` },
     },
 
+    fb50: {
+      ko: { tcode:'FB50', title:'일반경비 발생 전표 입력', lines:[
+        { type:'Dr', account:'급여비용 (CC003 $300 + CC004 $200)', amount:500 },
+        { type:'Dr', account:'임차료 (CC003)', amount:150 },
+        { type:'Dr', account:'수도광열비 (CC003)', amount:50 },
+        { type:'Dr', account:'소모품비 (CC004)', amount:60 },
+        { type:'Dr', account:'여비교통비 (CC004)', amount:40 },
+        { type:'Cr', account:'미지급비용', amount:800 },
+      ], note:'SG&A성 1차 원가요소 발생을 원가센터(CC003 관리부문/CC004 영업부문)에 배정.' },
+      en: { tcode:'FB50', title:'Post General Expense Accrual', lines:[
+        { type:'Dr', account:'Salaries (CC003 $300 + CC004 $200)', amount:500 },
+        { type:'Dr', account:'Rent Expense (CC003)', amount:150 },
+        { type:'Dr', account:'Utilities (CC003)', amount:50 },
+        { type:'Dr', account:'Supplies Expense (CC004)', amount:60 },
+        { type:'Dr', account:'Travel Expense (CC004)', amount:40 },
+        { type:'Cr', account:'Accrued Expenses', amount:800 },
+      ], note:'Accrue SG&A primary cost elements, assigned to cost centers CC003 (Admin) / CC004 (Sales).' },
+    },
+    ksb1: {
+      ko: { tcode:'KSB1', title:'원가센터 발생 현황 조회', lines:[
+        { account:'CC003 관리부문 누적 발생: $500 (급여 300 + 임차료 150 + 수도광열비 50)' },
+        { account:'CC004 영업부문 누적 발생: $300 (급여 200 + 소모품비 60 + 여비교통비 40)' },
+      ], note:'배분 전 Pool 잔액 조회. 회계 전표는 발생하지 않음.' },
+      en: { tcode:'KSB1', title:'Cost Center Line-Item Report', lines:[
+        { account:'CC003 Administration accrued: $500 (Salary 300 + Rent 150 + Utilities 50)' },
+        { account:'CC004 Sales & Distribution accrued: $300 (Salary 200 + Supplies 60 + Travel 40)' },
+      ], note:'Pool balance before assessment. No FI posting.' },
+    },
+    ksu5: {
+      ko: { tcode:'KSU5', title:'원가센터 배분(Assessment) 실행', lines:[
+        { type:'Dr', account:`CO-PA 세그먼트 (고객 ${sdCust}) SG&A 배분`, amount:800 },
+        { type:'Cr', account:'CC003 관리부문 Assessment (2차 원가요소)', amount:500 },
+        { type:'Cr', account:'CC004 영업부문 Assessment (2차 원가요소)', amount:300 },
+      ], note:'CO 내부 배부(보조원장 이동)로, FI 실물 전표가 아님. 배분 후 원가센터 Pool 잔액은 0이 됩니다.' },
+      en: { tcode:'KSU5', title:'Run Cost Center Assessment', lines:[
+        { type:'Dr', account:`CO-PA Segment (Customer ${sdCust}) SG&A Allocation`, amount:800 },
+        { type:'Cr', account:'CC003 Administration Assessment (secondary cost element)', amount:500 },
+        { type:'Cr', account:'CC004 Sales & Distribution Assessment (secondary cost element)', amount:300 },
+      ], note:'A CO-internal reallocation (subledger move), not an FI document. Cost center pools drop to zero after assessment.' },
+    },
+    ke30: {
+      ko: { tcode:'KE30', title:'손익·CO-PA 반영 확인', lines:[
+        { account:`매출액 $${sdRev.toFixed(2)} - 매출원가 $${sdCOGS.toFixed(2)} - 일반관리비(SG&A) $800.00 = 영업이익 $${(sdRev - sdCOGS - 800).toFixed(2)}` },
+      ], note:'단일 판매 건 vs 월간 일반경비 규모 차이로 인해 이 데모에서는 영업이익이 (-)로 표시될 수 있습니다 (학습용 축소 시나리오).' },
+      en: { tcode:'KE30', title:'Confirm P&L / CO-PA Impact', lines:[
+        { account:`Revenue $${sdRev.toFixed(2)} - COGS $${sdCOGS.toFixed(2)} - SG&A $800.00 = Operating Profit $${(sdRev - sdCOGS - 800).toFixed(2)}` },
+      ], note:'Operating profit may show negative in this demo since a single sale is compared against a full period of overhead (scaled-down teaching scenario).' },
+    },
+
     va01: {
       ko: { tcode:'VA01', title:'판매오더 생성', lines:[{ account:`SO 생성: ${sd.matCode} ${sdQty}EA × $${sdPrice.toFixed(2)} = $${sdRev.toFixed(2)}` }], note:'판매오더 생성. FI 전표 없음, CO-PA에 수주 기록.' },
       en: { tcode:'VA01', title:'Create Sales Order', lines:[{ account:`SO created: ${sd.matCode} ${sdQty}EA × $${sdPrice.toFixed(2)} = $${sdRev.toFixed(2)}` }], note:'Sales order created. No FI posting. Order recorded in CO-PA.' },
@@ -1244,6 +1325,43 @@ const FICO_GUIDE = [
   }
 ];
 
+const OVERHEAD_GUIDE = [
+  {
+    icon: '🏢',
+    title: '일반경비(SG&A)란?',
+    desc: '제조원가(PP 탭)와 달리 제품에 직접 추적되지 않는 관리비·판매비를 말합니다. 급여, 임차료, 수도광열비, 소모품비, 여비교통비 등이 원가센터(Cost Center)에 발생 전표로 집계된 뒤, 최종적으로 CO-PA 또는 손익계산서에 반영됩니다.',
+    note: '제조원가는 원가센터→제품(WIP)으로 흐르지만, 일반경비는 원가센터→CO-PA 세그먼트로 직접 배분됩니다.'
+  },
+  {
+    icon: '🧾',
+    title: '일반경비 발생 전표',
+    desc: '원가요소(급여/임차료/수도광열비/소모품비/여비교통비)별로 발생액을 원가센터(CC003 관리부문, CC004 영업부문)에 배정하여 회계 전표를 입력합니다.',
+    tcode: 'FB50 (일반전표입력, CO 객체 배정 포함)',
+    note: '차변은 각 비용계정, 대변은 미지급비용/현금입니다.'
+  },
+  {
+    icon: '📋',
+    title: '원가센터 발생 현황 조회',
+    desc: '원가센터별로 누적된 원가요소 발생액을 확인합니다. 아직 CO-PA로 배분되지 않은 Pool 잔액입니다.',
+    tcode: 'KSB1 (코스트센터 실제원가 라인아이템 리포트)',
+    note: '배분 전 조회이므로 회계 전표는 발생하지 않습니다.'
+  },
+  {
+    icon: '🔀',
+    title: '원가센터 배분 (Assessment)',
+    desc: '원가센터 Pool에 쌓인 간접비를 통계 키(매출액 비율 등)를 기준으로 CO-PA 세그먼트(고객/제품군)에 배분합니다. 이는 CO 내부 이동으로, FI 실물 전표가 아닌 CO 보조원장 이동입니다.',
+    tcode: 'KSU5 (Assessment Cycle 실행)',
+    note: '배분 후 원가센터 Pool 잔액은 0이 되고, CO-PA 세그먼트에 SG&A 비용이 반영됩니다.'
+  },
+  {
+    icon: '📊',
+    title: '손익/CO-PA 반영 확인',
+    desc: '배분이 끝난 뒤 최종 손익계산서(매출-매출원가-SG&A=영업이익) 또는 CO-PA 기여이익을 조회하여 결과를 확인합니다.',
+    tcode: 'KE30 (CO-PA 보고서) / S_ALR_87013611 (손익계산서)',
+    note: '영업이익 = 매출액 - 매출원가 - 일반관리비(SG&A).'
+  }
+];
+
 const SD_GUIDE = [
   {
     icon: '👥',
@@ -1455,6 +1573,10 @@ const MAPPING_DATA = [
   { fn:'F30', tcode:'CKMLCP', ko:'실제원가 다중레벨 (FG)',   en:'Actual Cost Multi-Level (FG)',  oracle:'CST — Cost Rollup (Actual)' },
   { fn:'F31', tcode:'CKMLCP', ko:'실제원가 결산전기',        en:'Actual Cost Post Closing',      oracle:'CST — Period Close' },
   { fn:'F32', tcode:'KE27',   ko:'수익성 실제전기 (CO-PA)',  en:'Profitability Actual Posting',  oracle:'PA/OBIEE — Profitability' },
+  { fn:'F33', tcode:'FB50',   ko:'일반경비 발생 전표 입력',   en:'Post General Expense Accrual',  oracle:'GL — Journal Entry (Cost Center)' },
+  { fn:'F34', tcode:'KSB1',   ko:'원가센터 발생 현황 조회',   en:'Cost Center Line-Item Report',  oracle:'CST — Cost Center Actual Line Items' },
+  { fn:'F35', tcode:'KSU5',   ko:'원가센터 배분 (Assessment)', en:'Run Cost Center Assessment',   oracle:'CST — Overhead Allocation' },
+  { fn:'F36', tcode:'KE30',   ko:'손익·CO-PA 반영 확인',      en:'Confirm P&L / CO-PA Impact',    oracle:'PA/OBIEE — Profitability Report' },
 ];
 const MappingModal = ({ lang, onClose }) => {
   const ko = lang === 'ko';
@@ -2744,6 +2866,89 @@ const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Step
         </Card>
       </div>
     </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   OVERHEAD TAB (General/Overhead Expense — Cost Center accrual & assessment)
+   ========================================================================= */
+const OverheadTab = ({ overheadSteps, setOverheadSteps, openPopup, lang='ko', simParams, materials }) => {
+  const t = T[lang];
+  const j = buildJournals(simParams, materials, lang);
+  const ccRows = [
+    { code:'CC003', desc: lang==='ko' ? '관리부문 (Administration)' : 'Administration', amt: 500 },
+    { code:'CC004', desc: lang==='ko' ? '영업부문 (Sales & Distribution)' : 'Sales & Distribution', amt: 300 },
+  ];
+  const revenue = 750, cogs = 225, sga = 800;
+  return (
+    <div>
+      <GuideSection title={t.overheadGuideTitle} items={OVERHEAD_GUIDE} lang={lang} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-3 space-y-4">
+          <Card title={t.overheadCardTitle}>
+            <p className="text-xs text-slate-500 mb-3">{t.overheadDesc}</p>
+            <StepButton steps={overheadSteps} setSteps={setOverheadSteps} stepKey="fb50" label={t.btnFB50} color="indigo" lang={lang} openPopup={openPopup}
+              journalData={j.fb50[lang]} />
+            <StepButton steps={overheadSteps} setSteps={setOverheadSteps} stepKey="ksb1" label={t.btnKSB1} color="indigo" disabled={!overheadSteps.fb50} lang={lang} openPopup={openPopup}
+              journalData={j.ksb1[lang]} />
+            <StepButton steps={overheadSteps} setSteps={setOverheadSteps} stepKey="ksu5" label={t.btnKSU5} color="indigo" disabled={!overheadSteps.ksb1} lang={lang} openPopup={openPopup}
+              journalData={j.ksu5[lang]} />
+            <StepButton steps={overheadSteps} setSteps={setOverheadSteps} stepKey="ke30" label={t.btnKE30} color="indigo" disabled={!overheadSteps.ksu5} lang={lang} openPopup={openPopup}
+              journalData={j.ke30[lang]} />
+          </Card>
+
+          <Card title={`📋 ${t.overheadCCTitle}`}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
+                  <th className="py-1.5">{t.overheadCCCol}</th>
+                  <th className="py-1.5">{t.overheadCCDesc}</th>
+                  <th className="py-1.5 text-right">{t.overheadCCAmt}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ccRows.map(r => (
+                  <tr key={r.code} className="border-b border-slate-50">
+                    <td className="py-1.5 font-mono text-slate-700">{r.code}</td>
+                    <td className="py-1.5 text-slate-600">{r.desc}</td>
+                    <td className="py-1.5 text-right font-medium">
+                      {overheadSteps.ksu5 ? <span className="text-slate-400">$0.00 ({lang==='ko'?'배분완료':'assessed'})</span> : <Money v={r.amt}/>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-2 space-y-4">
+          <Card title={t.overheadPLTitle}>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1.5 text-slate-600">{t.overheadPLRevenue}</td>
+                  <td className="py-1.5 text-right font-medium"><Money v={revenue}/></td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1.5 text-slate-600">{t.overheadPLCOGS}</td>
+                  <td className="py-1.5 text-right">-<Money v={cogs}/></td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1.5 text-slate-600">{t.overheadPLSGA}</td>
+                  <td className="py-1.5 text-right text-red-600">{overheadSteps.ke30 ? <span>-<Money v={sga}/></span> : '$0.00'}</td>
+                </tr>
+                <tr className="font-semibold">
+                  <td className="py-1.5">{t.overheadPLOP}</td>
+                  <td className="py-1.5 text-right text-indigo-600">
+                    <Money v={overheadSteps.ke30 ? (revenue - cogs - sga) : (revenue - cogs)}/>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };
@@ -4126,6 +4331,7 @@ function App() {
     ko88_h:false, ko88_f:false
   });
   const [ficoSteps, setFicoSteps] = useState({ kss2:false, sl_roh:false, sl_halb:false, ml:false, pc:false, ke27:false });
+  const [overheadSteps, setOverheadSteps] = useState({ fb50:false, ksb1:false, ksu5:false, ke30:false });
   const [sdSteps, setSdSteps] = useState({ va01:false, vl01n:false, vf01:false, f28:false });
   const [ckSteps, setCkSteps] = useState({ kp26:false, ck11n_h:false, ck24_h:false, ck11n_f:false, ck24_f:false });
 
@@ -4338,6 +4544,7 @@ function App() {
     { id:'mm',      label:tabLabels[1], icon:'🛒' },
     { id:'pp',      label:tabLabels[2], icon:'🏭' },
     { id:'fico',    label:tabLabels[3], icon:'🧮' },
+    { id:'overhead', label:lang==='ko'?'일반경비':'General/Overhead Expense', icon:'🧾' },
     { id:'sd',      label:tabLabels[4], icon:'💵' },
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
@@ -4355,7 +4562,7 @@ function App() {
     { id:'grp_params',   label:'Intro',    icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
-    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','copa','costmodel'] },
+    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
     { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
@@ -4365,7 +4572,7 @@ function App() {
     { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
-    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','copa','ledger'] },
+    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger'] },
     { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
@@ -4497,6 +4704,7 @@ function App() {
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} simParams={simParams} materials={materials} />}
         {activeTab==='pp' && <PPTab ppSteps={ppSteps} setPpSteps={setPpSteps} openPopup={openPopup} ppInv={ppInv} wip={wip} ppVar={ppVar} lang={lang} simParams={simParams} materials={materials} />}
         {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} simParams={simParams} materials={materials} />}
+        {activeTab==='overhead' && <OverheadTab overheadSteps={overheadSteps} setOverheadSteps={setOverheadSteps} openPopup={openPopup} lang={lang} simParams={simParams} materials={materials} />}
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
         {activeTab==='ledger' && <LedgerTab mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} ckSteps={ckSteps} materials={materials} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}

@@ -1497,21 +1497,6 @@ const MappingModal = ({ lang, onClose }) => {
     </div>
   );
 };
-const MappingButton = ({ lang }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1 px-3 py-1 rounded-full border border-amber-400/60 bg-amber-400/10 text-xs font-semibold text-amber-200 hover:bg-amber-400/20 transition-colors"
-      >
-        📑 {lang === 'ko' ? 'T-code 매핑' : 'T-code Map'}
-      </button>
-      {open && <MappingModal lang={lang} onClose={() => setOpen(false)} />}
-    </>
-  );
-};
-
 /* =========================================================================
    TEAM LEAD BUSINESS GUIDE (bilingual; business flow before SAP)
    ========================================================================= */
@@ -1650,15 +1635,51 @@ const GuideModal = ({ lang, onClose }) => {
     </div>
   );
 };
-const GuideButton = ({ lang }) => {
+/* =========================================================================
+   LEARNING TOOLS SWITCHER (Odoo-style app launcher — Mid-term UI item)
+   Consolidates Intro Tour / T-code Map / Team Lead Guide into one grid
+   dropdown instead of three separate header pills.
+   ========================================================================= */
+const LEARNING_TOOLS = [
+  { id:'intro',   icon:'🎬', ko:'둘러보기',    en:'Intro Tour', color:'indigo' },
+  { id:'mapping', icon:'📑', ko:'T-code 매핑', en:'T-code Map', color:'amber' },
+  { id:'guide',   icon:'📘', ko:'팀장 가이드', en:'Lead Guide', color:'emerald' },
+];
+const LEARNING_TOOL_COLORS = {
+  indigo:'border-indigo-300 bg-indigo-50 hover:border-indigo-400',
+  amber:'border-amber-300 bg-amber-50 hover:border-amber-400',
+  emerald:'border-emerald-300 bg-emerald-50 hover:border-emerald-400',
+};
+const LearningToolsSwitcher = ({ lang }) => {
   const [open, setOpen] = useState(false);
+  const [modal, setModal] = useState(null); // 'intro' | 'mapping' | 'guide' | null
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
   return (
-    <>
-      <button onClick={() => setOpen(true)} className="flex items-center gap-1 px-3 py-1 rounded-full border border-emerald-400/60 bg-emerald-400/10 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20 transition-colors">
-        📘 {lang === 'ko' ? '팀장 가이드' : 'Lead Guide'}
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-3 py-1 rounded-full border border-white/30 bg-white/10 text-xs font-semibold text-white hover:bg-white/20 transition-colors">
+        🧰 {lang === 'ko' ? '학습 도구' : 'Learning Tools'}
       </button>
-      {open && <GuideModal lang={lang} onClose={() => setOpen(false)} />}
-    </>
+      {open && (
+        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 grid grid-cols-3 gap-2 z-50">
+          {LEARNING_TOOLS.map(tool => (
+            <button key={tool.id} onClick={() => { setModal(tool.id); setOpen(false); }}
+              className={`flex flex-col items-center gap-1 rounded-lg border-2 p-2 text-center transition-colors ${LEARNING_TOOL_COLORS[tool.color]}`}>
+              <span className="text-2xl">{tool.icon}</span>
+              <span className="text-[10px] font-semibold text-slate-700 leading-tight">{lang === 'ko' ? tool.ko : tool.en}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {modal === 'intro' && <IntroTour lang={lang} onClose={() => setModal(null)} />}
+      {modal === 'mapping' && <MappingModal lang={lang} onClose={() => setModal(null)} />}
+      {modal === 'guide' && <GuideModal lang={lang} onClose={() => setModal(null)} />}
+    </div>
   );
 };
 
@@ -3935,8 +3956,28 @@ const ROLE_TILES = [
   { tab:'fico',   icon:'📊', cls:'border-violet-200 bg-violet-50 hover:border-violet-400',   title:{ko:'원가·결산',en:'Costing & Close'},sap:'원가·CO',   desc:{ko:'표준원가 · 실제원가 결산 · 수익성',en:'Standard cost · actual close · profit'} },
   { tab:'flow',   icon:'🗺️', cls:'border-slate-200 bg-slate-50 hover:border-slate-400',       title:{ko:'가이드',en:'Guide'},            sap:'학습·투어', desc:{ko:'전체 흐름 · 시나리오 · 변수입력',en:'Big picture · scenario · variables'} },
 ];
-const RoleLaunchpad = ({ lang='ko', setActiveTab }) => {
+// Maps each role tile's tab to its steps object + the T[lang] key holding each step's button label.
+// Lets the launchpad card show "지금 할 일" without duplicating label strings.
+const NEXT_TASK_LABEL_KEYS = {
+  master: { key:'kp26', labels:{ kp26:'btnKP26', ck11n_h:'btnCK11N_H', ck24_h:'btnCK24_H', ck11n_f:'btnCK11N_F', ck24_f:'btnCK24_F' } },
+  mm:     { labels:{ me21n:'btnME21N', migo_gr:'btnMIGO_GR', miro:'btnMIRO', f53:'btnF53' } },
+  pp:     { labels:{ co01_h:'btnCO01_H', gi_h:'btnGI_H', co11n_h:'btnCO11N_H', gr_h:'btnGR_H', co01_f:'btnCO01_F', gi_f:'btnGI_F', co11n_f:'btnCO11N_F', gr_f:'btnGR_F', ko88_h:'btnKO88_H', ko88_f:'btnKO88_F' } },
+  fico:   { labels:{ kss2:'btnKSS2', sl_roh:'btnSL_ROH', sl_halb:'btnSL_HALB', ml:'btnML', pc:'btnPC', ke27:'btnKE27' } },
+  sd:     { labels:{ va01:'btnVA01', vl01n:'btnVL01N', vf01:'btnVF01', f28:'btnF28' } },
+};
+const nextTaskFor = (tab, stepsByTab, t) => {
+  const cfg = NEXT_TASK_LABEL_KEYS[tab];
+  if (!cfg) return null;
+  const steps = stepsByTab[tab];
+  if (!steps) return null;
+  const firstUndoneKey = Object.keys(cfg.labels).find(k => !steps[k]);
+  if (!firstUndoneKey) return { done: true };
+  return { done: false, label: t[cfg.labels[firstUndoneKey]] };
+};
+const RoleLaunchpad = ({ lang='ko', setActiveTab, ckSteps, mmSteps, ppSteps, ficoSteps, sdSteps }) => {
   const ko = lang === 'ko';
+  const t = T[lang];
+  const stepsByTab = { master: ckSteps, mm: mmSteps, pp: ppSteps, fico: ficoSteps, sd: sdSteps };
   return (
     <div>
       <div className="mb-4">
@@ -3944,20 +3985,30 @@ const RoleLaunchpad = ({ lang='ko', setActiveTab }) => {
         <p className="text-xs text-slate-500 mt-0.5">{ko?'내 업무 카드를 누르면 바로 시작합니다. (현업 모드 홈)':'Tap your task card to start. (Field-mode home)'}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {ROLE_TILES.map(r => (
-          <button key={r.tab} onClick={() => setActiveTab(r.tab)}
-            className={`text-left rounded-xl border-2 p-4 transition-all hover:shadow-md ${r.cls}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">{r.icon}</span>
-              <div>
-                <div className="text-base font-bold text-slate-800">{ko?r.title.ko:r.title.en}</div>
-                <div className="text-[10px] text-slate-400">{r.sap}</div>
+        {ROLE_TILES.map(r => {
+          const next = nextTaskFor(r.tab, stepsByTab, t);
+          return (
+            <button key={r.tab} onClick={() => setActiveTab(r.tab)}
+              className={`text-left rounded-xl border-2 p-4 transition-all hover:shadow-md ${r.cls}`}>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-3xl">{r.icon}</span>
+                <div>
+                  <div className="text-base font-bold text-slate-800">{ko?r.title.ko:r.title.en}</div>
+                  <div className="text-[10px] text-slate-400">{r.sap}</div>
+                </div>
               </div>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed">{ko?r.desc.ko:r.desc.en}</p>
-            <div className="mt-2 text-xs font-semibold text-indigo-600">{ko?'바로가기 →':'Open →'}</div>
-          </button>
-        ))}
+              <p className="text-xs text-slate-600 leading-relaxed">{ko?r.desc.ko:r.desc.en}</p>
+              {next && (
+                next.done
+                  ? <div className="mt-2 text-[11px] font-semibold text-green-600 flex items-center gap-1">✅ {ko?'모든 단계 완료':'All steps done'}</div>
+                  : <div className="mt-2 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center gap-1">
+                      👉 {ko?'지금 할 일: ':'Up next: '}{next.label}
+                    </div>
+              )}
+              <div className="mt-2 text-xs font-semibold text-indigo-600">{ko?'바로가기 →':'Open →'}</div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -4358,14 +4409,8 @@ function App() {
                 </button>
               </div>
               <div className="w-px h-5 bg-white/15 mx-0.5" />
-              {/* Tour (separate) */}
-              <IntroButton lang={lang} />
-              <div className="w-px h-5 bg-white/15 mx-0.5" />
-              {/* Reference */}
-              <MappingButton lang={lang} />
-              <div className="w-px h-5 bg-white/15 mx-0.5" />
-              {/* Team Lead Guide (separate) */}
-              <GuideButton lang={lang} />
+              {/* Learning tools (Intro Tour / T-code Map / Lead Guide) — app-switcher style */}
+              <LearningToolsSwitcher lang={lang} />
             </div>
           </div>
           {/* PIN Row (above Group Nav) */}
@@ -4444,7 +4489,8 @@ function App() {
         )}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
         {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
-        {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab} />}
+        {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
+          ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />}
         {unlocked && viewMode==='field' && activeTab!=='home_field' && <RoleGuide tab={activeTab} lang={lang} />}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} simParams={simParams} lang={lang} />}

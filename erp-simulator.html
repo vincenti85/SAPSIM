@@ -11,9 +11,10 @@
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <style>
   .border-l-3 { border-left-width: 3px; }
-  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  /* Notion-inspired tokens: warm neutral canvas, quiet borders, calm chrome */
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background-color: #FAFAF8; color: #37352F; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: #D3D1CB; border-radius: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
   @keyframes tourIn { from { opacity:0; transform: translateY(14px) scale(1.03); } to { opacity:1; transform:none; } }
   @keyframes tourKenburns { from { transform: scale(1); } to { transform: scale(1.12); } }
@@ -77,7 +78,7 @@
   }
 </style>
 </head>
-<body class="bg-slate-100">
+<body>
 <button id="dark-toggle" onclick="document.body.classList.toggle('dark');this.textContent=document.body.classList.contains('dark')?'☀ Light':'🌙 Dark'" title="다크 모드 전환">🌙 Dark</button>
 <div id="root"></div>
 
@@ -1796,7 +1797,7 @@ const LearningToolsSwitcher = ({ lang }) => {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1 px-3 py-1 rounded-full border border-white/30 bg-white/10 text-xs font-semibold text-white hover:bg-white/20 transition-colors">
+        className="flex items-center gap-1 px-3 py-1 rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">
         🧰 {lang === 'ko' ? '학습 도구' : 'Learning Tools'}
       </button>
       {open && (
@@ -1876,26 +1877,51 @@ const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData
     });
     onCancel?.();
   };
+  // Progressive disclosure: done steps collapse to a summary line, the next
+  // actionable step renders as the single prominent CTA, locked steps dim out.
+  if (done) return (
+    <div className="flex items-center gap-1.5 px-2 py-1 mb-0.5 rounded text-xs text-slate-500">
+      <span className="text-green-600 font-bold">✓</span>
+      <span>{label}</span>
+      {journalData && <button onClick={() => openPopup(journalData)}
+        className="px-1.5 py-0.5 rounded text-[11px] text-blue-600 hover:bg-blue-50">{T[lang].journalBtn}</button>}
+      <button onClick={cancel} className="px-1.5 py-0.5 rounded text-[11px] text-slate-400 hover:text-red-600 hover:bg-red-50">↺</button>
+    </div>
+  );
+  if (disabled) return (
+    <div className="flex items-center gap-1.5 px-2 py-1 mb-0.5 rounded text-xs text-slate-400/80">
+      <span className="text-[11px]">🔒</span>
+      <span>{label}</span>
+    </div>
+  );
   return (
-    <div className="flex gap-0.5 mb-1 items-center">
-      <button onClick={execute} disabled={done || disabled}
-        className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-all
-          ${done ? 'bg-green-100 text-green-700 border border-green-300'
-                 : disabled ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                 : `${colors[color]} text-white shadow-sm`}
-          ${isNext ? 'ring-2 ring-offset-1 ring-yellow-400 animate-pulse' : ''}`}>
-        {done ? '✓' : isNext ? '👉' : '▶'} {label}
-        {isNext && <span className="ml-1 px-1 py-0.5 rounded bg-yellow-300 text-yellow-900 text-[10px] font-bold leading-none">
-          {lang==='ko' ? '다음' : 'NEXT'}
-        </span>}
+    <button onClick={execute}
+      className={`w-full flex items-center gap-2 px-3 mb-1 rounded-lg text-left font-medium transition-all text-white shadow-sm ${colors[color]}
+        ${isNext ? 'py-2.5 text-sm' : 'py-1.5 text-xs'}`}>
+      <span>{isNext ? '👉' : '▶'}</span>
+      <span>{label}</span>
+      {isNext && <span className="ml-auto shrink-0 px-1.5 py-0.5 rounded bg-white/25 text-[10px] font-bold">
+        {lang==='ko' ? '다음 할 일' : 'NEXT'}
+      </span>}
+    </button>
+  );
+};
+
+/* =========================================================================
+   ADVANCED SECTION (collapsed by default — keeps beginner view minimal)
+   ========================================================================= */
+const AdvancedSection = ({ title, children, lang='ko' }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-slate-50 transition-colors">
+        <span className="text-sm font-medium text-slate-600">{open ? '▾' : '▸'} {title}</span>
+        <span className="text-[10px] text-slate-400">
+          {lang==='ko' ? (open ? '접기' : '고급 · 펼치기') : (open ? 'Collapse' : 'Advanced · Expand')}
+        </span>
       </button>
-      {done && (
-        <>
-          {journalData && <button onClick={() => openPopup(journalData)}
-            className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-600 hover:bg-blue-200">{T[lang].journalBtn}</button>}
-          <button onClick={cancel} className="px-2 py-1 rounded text-xs bg-red-100 text-red-600 hover:bg-red-200">↺</button>
-        </>
-      )}
+      {open && <div className="p-3 border-t border-slate-100 space-y-4 bg-slate-50/50">{children}</div>}
     </div>
   );
 };
@@ -1923,7 +1949,7 @@ const ScenarioProgress = ({ ckSteps, mmSteps, ppSteps, ficoSteps, sdSteps, activ
     fico: stepsRatio(ficoSteps), sd: stepsRatio(sdSteps),
   };
   return (
-    <div className="flex items-center gap-1 flex-wrap py-1.5 border-b border-white/10">
+    <div className="flex items-center gap-1 flex-wrap py-1.5 border-b border-slate-100">
       <span className="text-[11px] text-slate-400 mr-0.5">{lang==='ko' ? '진행' : 'Progress'}</span>
       {SCENARIO_MODULES.map((m, i) => {
         const r = ratios[m.key];
@@ -1933,15 +1959,15 @@ const ScenarioProgress = ({ ckSteps, mmSteps, ppSteps, ficoSteps, sdSteps, activ
           <React.Fragment key={m.key}>
             <button onClick={() => setActiveTab(m.tab)}
               className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all
-                ${state==='complete' ? 'bg-green-500/20 border-green-400 text-green-200'
-                  : state==='partial' ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                  : 'bg-white/5 border-white/15 text-slate-400'}
-                ${isCurrent ? 'ring-2 ring-white/60' : ''}`}>
+                ${state==='complete' ? 'bg-green-50 border-green-300 text-green-700'
+                  : state==='partial' ? 'bg-amber-50 border-amber-300 text-amber-700'
+                  : 'bg-slate-50 border-slate-200 text-slate-400'}
+                ${isCurrent ? 'ring-2 ring-indigo-300' : ''}`}>
               <span>{state==='complete' ? '✅' : state==='partial' ? '🔶' : m.icon}</span>
               <span>{lang==='ko' ? m.ko : m.en}</span>
               <span className="opacity-70">{r.done}/{r.total}</span>
             </button>
-            {i < SCENARIO_MODULES.length - 1 && <span className="text-slate-600 text-xs">→</span>}
+            {i < SCENARIO_MODULES.length - 1 && <span className="text-slate-300 text-xs">→</span>}
           </React.Fragment>
         );
       })}
@@ -2554,6 +2580,7 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
             journalData={buildJournals(simParams, materials, lang).f53[lang]} />
         </Card>
 
+        <AdvancedSection lang={lang} title={lang==='ko' ? '🧪 부가 시나리오 — 반품 · 재고실사 · 후속차변' : '🧪 Advanced — Returns · Stock Count · Subsequent Debit'}>
         <Card title={t.retTitle}>
           <p className="text-xs text-slate-500 mb-3">
             {t.retDesc}
@@ -2604,6 +2631,7 @@ const MMTab = ({ mmSteps, setMmSteps, openPopup, mmInv, apBalance, priceVar, lan
             </div>
           )}
         </Card>
+        </AdvancedSection>
       </div>
       <div className="lg:col-span-2 space-y-4">
         <Card title={t.invTable}>
@@ -2800,6 +2828,7 @@ const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Step
             journalData={buildJournals(simParams, materials, lang).ke27[lang]} />
         </Card>
 
+        <AdvancedSection lang={lang} title={lang==='ko' ? '🧪 부가 시나리오 — 자재 재평가' : '🧪 Advanced — Material Revaluation'}>
         <Card title={t.mr21CardTitle}>
           <p className="text-xs text-slate-500 mb-3">
             {t.mr21Desc}
@@ -2807,6 +2836,7 @@ const FICOTab = ({ ficoSteps, setFicoSteps, openPopup, copa, lang='ko', mr21Step
           <StepButton steps={mr21Steps} setSteps={setMr21Steps} stepKey="mr21" label={t.btnMR21} color="orange" lang={lang} openPopup={openPopup}
             journalData={buildJournals(simParams, materials, lang).mr21[lang]} />
         </Card>
+        </AdvancedSection>
 
         <div className="grid grid-cols-1 gap-4">
           <div>
@@ -3024,6 +3054,7 @@ const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, fico
           {!ficoDone && <p className="text-xs text-amber-600 mt-2">{t.plNote}</p>}
         </Card>
 
+        <AdvancedSection lang={lang} title={lang==='ko' ? '🧪 부가 시나리오 — 고객 반품' : '🧪 Advanced — Customer Return'}>
         <Card title={t.sdRetTitle}>
           <p className="text-xs text-slate-500 mb-3">
             {t.sdRetDesc}
@@ -3035,6 +3066,7 @@ const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, fico
           <StepButton steps={sdReturnSteps} setSteps={setSdReturnSteps} stepKey="ret_credit" label={t.btnCreditMemo} color="red" disabled={!sdReturnSteps.ret_del} lang={lang} openPopup={openPopup}
             journalData={buildJournals(simParams, materials, lang).vf01_ret[lang]} />
         </Card>
+        </AdvancedSection>
       </div>
 
       <div className="lg:col-span-2 space-y-4">
@@ -4595,13 +4627,13 @@ function App() {
     <div className="min-h-screen">
       {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
 
-      <header className="bg-gradient-to-r from-slate-800 to-slate-700 text-white shadow-md">
+      <header className="bg-white border-b border-slate-200 text-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="text-2xl">🏭</span>
             <div>
-              <h1 className="font-bold text-lg">ERP Process Learning Simulator — {COMPANY.name}</h1>
-              <p className="text-xs text-slate-300">
+              <h1 className="font-bold text-lg text-slate-800">ERP Process Learning Simulator — {COMPANY.name}</h1>
+              <p className="text-xs text-slate-500">
                 Company Code {COMPANY.code} · Plant {COMPANY.plant} ({COMPANY.plantName})
               </p>
             </div>
@@ -4609,50 +4641,50 @@ function App() {
               {/* Language */}
               <button
                 onClick={() => setLang(l => l === 'ko' ? 'en' : 'ko')}
-                className="flex items-center gap-1 px-3 py-1 rounded-full border border-slate-500 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+                className="flex items-center gap-1 px-3 py-1 rounded-full border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
               </button>
-              <div className="w-px h-5 bg-white/15 mx-0.5" />
+              <div className="w-px h-5 bg-slate-200 mx-0.5" />
               {/* View Mode: 현업(Field) vs 회계(Accounting) */}
-              <div className="flex items-center rounded-full border border-slate-500 overflow-hidden text-xs font-semibold">
+              <div className="flex items-center rounded-full border border-slate-300 overflow-hidden text-xs font-semibold">
                 <button
                   onClick={() => { setViewMode('field'); setActiveTab('home_field'); }}
-                  className={`px-3 py-1 transition-colors ${viewMode==='field' ? 'bg-indigo-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
+                  className={`px-3 py-1 transition-colors ${viewMode==='field' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
                   {lang==='ko' ? '🧑‍🏭 현업' : '🧑‍🏭 Field'}
                 </button>
                 <button
                   onClick={() => { setViewMode('accounting'); setActiveTab('home_acct'); }}
-                  className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-teal-600 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
+                  className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
                   {lang==='ko' ? '🧮 회계' : '🧮 Accounting'}
                 </button>
               </div>
-              <div className="w-px h-5 bg-white/15 mx-0.5" />
+              <div className="w-px h-5 bg-slate-200 mx-0.5" />
               {/* Learning tools (Intro Tour / T-code Map / Lead Guide) — app-switcher style */}
               <LearningToolsSwitcher lang={lang} />
             </div>
           </div>
           {/* PIN Row (above Group Nav) */}
-          <div className="mt-2 flex items-center gap-2 border-b border-white/10 pb-2">
+          <div className="mt-2 flex items-center gap-2 border-b border-slate-100 pb-2">
             {unlocked ? (
-              <span className="text-xs text-green-300 flex items-center gap-1.5">
+              <span className="text-xs text-green-600 flex items-center gap-1.5">
                 <span>✅</span>
                 <span>{lang==='ko' ? '인증 완료 — 전체 메뉴 활성화' : 'Authenticated — Full access'}</span>
               </span>
             ) : (
               <div className="flex items-center gap-2" ref={pinContainerRef}>
-                <span className="text-xs text-slate-300">🔐 PIN:</span>
+                <span className="text-xs text-slate-500">🔐 PIN:</span>
                 {pinDigits.map((d, i) => (
                   <input key={i} type="password" inputMode="numeric" maxLength={1} value={d}
                     autoFocus={i === 0}
                     onChange={e => handlePinInput(i, e.target.value)}
                     onKeyDown={e => handlePinKeyDown(i, e)}
-                    className={`w-8 h-8 text-center text-sm font-bold rounded border-2 bg-slate-700 text-white outline-none transition-colors
-                      ${pinError ? 'border-red-400 bg-red-900/40 animate-pulse' : 'border-slate-500 focus:border-indigo-400'}`}
+                    className={`w-8 h-8 text-center text-sm font-bold rounded border-2 bg-white text-slate-800 outline-none transition-colors
+                      ${pinError ? 'border-red-400 bg-red-50 animate-pulse' : 'border-slate-300 focus:border-indigo-500'}`}
                   />
                 ))}
                 <span className="text-xs text-slate-400">{lang==='ko' ? '4자리 입력' : 'Enter 4 digits'}</span>
-                {pinError && <span className="text-xs text-red-400 font-semibold">❌</span>}
+                {pinError && <span className="text-xs text-red-500 font-semibold">❌</span>}
               </div>
             )}
           </div>
@@ -4672,17 +4704,17 @@ function App() {
                   ${!unlocked ? 'opacity-40 cursor-not-allowed' : ''}
                   ${activeGroup.id===g.id && unlocked
                     ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
-                    : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'}`}>
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
                 {g.icon} {g.label}
               </button>
             ))}
           </nav>
           {/* Sub-Tab Nav */}
-          <nav className="flex gap-1 flex-wrap border-t border-white/10 pt-0.5">
+          <nav className="flex gap-1 flex-wrap border-t border-slate-100 pt-1">
             {activeGroupTabs.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-all
-                  ${activeTab===t.id ? 'bg-slate-100 text-slate-800' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+                className={`px-3 py-1.5 rounded-md text-sm transition-all
+                  ${activeTab===t.id ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-500 hover:bg-slate-50 font-medium'}`}>
                 {t.icon} {t.label}
               </button>
             ))}

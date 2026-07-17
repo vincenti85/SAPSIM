@@ -32,3 +32,4 @@
 | 2026-07-01 | 'Introduction' 투어 15초→40초 확장 (7씬→10씬, 듀얼뷰·일반경비·진행스테퍼 신규 씬 추가, F01~F32→F01~F36 갱신) | dist/erp-simulator.html | 신규 기능 반영 및 투어 콘텐츠 보강 요청 |
 | 2026-07-01 | 좌측 슬림 사이드바 도입 (sm+ 화면에서 그룹 내비를 세로 아이콘 바로 이동, 모바일은 기존 가로 탭 유지) + SAPSIM main 푸시·workspace 브랜치 백업 | dist/erp-simulator.html | Mid-term UI 잔여 항목 완료, 원격 배포 반영 |
 | 2026-07-02 | Notion 스타일 라이트 테마 + 전면 단계형 노출 (화이트 헤더·웜뉴트럴 캔버스, StepButton=완료 축약/다음 할 일 단일 CTA/미래 🔒 잠금, 반품·재고실사·후속차변·고객반품·MR21 AdvancedSection 기본 접힘) | dist/erp-simulator.html | "초보자에게 복잡" 피드백 반영 — 디자인 시스템 개선 + progressive disclosure (Vercel 배포) |
+| 2026-07-02 | '발표 모드 (30분)' 신설 — 9챕터 스토리바(전체흐름3·마스터3·구매4·생산5·원가결산5·일반경비3·매출3·CO-PA2·분개원장2=30분, 경과 타이머·발표 포인트·이전/다음) + 회계 모드 그룹을 스토리 순서로 재배열(Tour/Intro→'참고자료' 맨 뒤) | dist/erp-simulator.html | 전체 내용을 30분 단일 스토리로 프리젠테이션 가능하도록 메뉴·구성 수정 (Vercel 배포) |

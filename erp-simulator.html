@@ -1818,6 +1818,85 @@ const LearningToolsSwitcher = ({ lang }) => {
   );
 };
 
+/* =========================================================================
+   STORY MODE (30-minute one-story presentation)
+   9 chapters totaling exactly 30 min. The bottom StoryBar drives activeTab
+   through the narrative with per-chapter talking points and a live timer.
+   ========================================================================= */
+const STORY_CHAPTERS = [
+  { tab:'flow',    icon:'🗺️', min:3, ko:'전체 흐름',        en:'The Big Picture',
+    pointsKo:['ABC Auto Parts: 사서(구매) → 만들어(생산) → 파는(판매) 회사','오늘 30분: 자재 구매부터 손익 확인까지 한 사이클을 완주합니다'],
+    pointsEn:['ABC Auto Parts: buy → make → sell','In 30 minutes: one full cycle from purchasing to profit'] },
+  { tab:'master',  icon:'🗂️', min:3, ko:'마스터 & 표준원가', en:'Master Data & Std Cost',
+    pointsKo:['멀티레벨 BOM: FG001 ← SF001 ← RM001·RM002','액티비티 단가 계획 → 반제품·완제품 표준원가 계산/릴리즈'],
+    pointsEn:['Multi-level BOM: FG001 ← SF001 ← RM001·RM002','Plan activity rates → calculate/release SF & FG standard cost'] },
+  { tab:'mm',      icon:'🛒', min:4, ko:'구매',              en:'Purchasing',
+    pointsKo:['PO 생성 → 입고(101) → 송장검증 → 지급','발주가 $5.00 vs 표준가 $5.50 → 구매가격차이 $50 유리 발생'],
+    pointsEn:['PO → GR(101) → invoice verification → payment','PO $5.00 vs std $5.50 → $50 favorable purchase price variance'] },
+  { tab:'pp',      icon:'🏭', min:5, ko:'생산',              en:'Production',
+    pointsKo:['반제품 SF001 먼저, 완제품 FG001 나중 — 하위→상위 순서가 핵심','실적 확정 후 오더 정산 → 표준 대비 생산차이가 드러남'],
+    pointsEn:['SF001 first, FG001 second — lower level before upper','Confirm actuals, settle orders → production variance revealed'] },
+  { tab:'fico',    icon:'📊', min:5, ko:'원가 결산',         en:'Costing Close',
+    pointsKo:['ML 단일레벨 → 다중레벨 롤업: RM → SF → FG','결산전기로 재고·매출원가가 실제원가로 보정됩니다'],
+    pointsEn:['ML single-level → multi-level rollup: RM → SF → FG','Post closing adjusts inventory & COGS to actual cost'] },
+  { tab:'overhead',icon:'🧾', min:3, ko:'일반경비',          en:'Overhead (SG&A)',
+    pointsKo:['급여·임차료 등 SG&A 발생 → 원가센터 집계 → Assessment 배분','제조원가와 달리 CO-PA 세그먼트로 직접 배분됩니다'],
+    pointsEn:['Accrue SG&A → cost center pool → assessment','Unlike production cost, allocated straight to CO-PA'] },
+  { tab:'sd',      icon:'💵', min:3, ko:'매출',              en:'Sales',
+    pointsKo:['수주 → 출하(COGS 인식) → 청구(매출 인식) → 수금','출하와 청구의 인식 시점 차이가 오늘의 포인트'],
+    pointsEn:['Order → GI (COGS) → billing (revenue) → collection','Key point: goods issue vs billing recognition timing'] },
+  { tab:'copa',    icon:'📈', min:2, ko:'수익성 마무리',     en:'Profitability Wrap-up',
+    pointsKo:['표준마진 70% → 실제마진 56.4%','구매·생산·경비의 모든 차이가 여기로 모입니다'],
+    pointsEn:['Standard margin 70% → actual margin 56.4%','Every variance from buy/make/overhead converges here'] },
+  { tab:'ledger',  icon:'📒', min:2, ko:'분개 원장 리뷰',    en:'Journal Review',
+    pointsKo:['오늘 실행한 모든 전표를 시간순으로 재확인','차변=대변, 모듈 간 연결을 확인하며 마무리'],
+    pointsEn:['Replay every document posted today in order','Close by confirming Dr=Cr and cross-module links'] },
+];
+const StoryBar = ({ idx, setIdx, onExit, setActiveTab, lang }) => {
+  const ko = lang === 'ko';
+  const ch = STORY_CHAPTERS[idx];
+  const total = STORY_CHAPTERS.length;
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+  const targetMin = STORY_CHAPTERS.slice(0, idx + 1).reduce((s, c) => s + c.min, 0);
+  const overTarget = elapsed > targetMin * 60;
+  const go = (i) => { if (i < 0 || i >= total) return; setIdx(i); setActiveTab(STORY_CHAPTERS[i].tab); };
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-40 bg-slate-900 text-white shadow-2xl">
+      <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-4">
+        <div className="shrink-0">
+          <div className="text-[10px] text-slate-400">
+            🎤 {ko ? '발표 모드' : 'Story Mode'} · {idx + 1}/{total} ·
+            <span className={overTarget ? ' text-red-400 font-bold' : ''}> ⏱ {mm}:{ss}</span>
+            <span className="text-slate-500"> / {targetMin}{ko ? '분 목표' : 'min target'}</span>
+          </div>
+          <div className="text-sm font-bold">{ch.icon} {ko ? ch.ko : ch.en}
+            <span className="text-[10px] font-normal text-slate-400"> ({ch.min}{ko ? '분' : 'min'})</span>
+          </div>
+        </div>
+        <ul className="flex-1 min-w-0 text-[11px] text-slate-300 space-y-0.5 hidden md:block">
+          {(ko ? ch.pointsKo : ch.pointsEn).map((p, i) => <li key={i} className="truncate">· {p}</li>)}
+        </ul>
+        <div className="shrink-0 flex items-center gap-1.5">
+          <button onClick={() => go(idx - 1)} disabled={idx === 0}
+            className={`px-2.5 py-1.5 rounded text-xs font-semibold ${idx === 0 ? 'bg-white/5 text-slate-600 cursor-not-allowed' : 'bg-white/10 hover:bg-white/20'}`}>◀ {ko ? '이전' : 'Prev'}</button>
+          <button onClick={() => go(idx + 1)} disabled={idx === total - 1}
+            className={`px-3 py-1.5 rounded text-xs font-bold ${idx === total - 1 ? 'bg-white/5 text-slate-600 cursor-not-allowed' : 'bg-indigo-500 hover:bg-indigo-400'}`}>{ko ? '다음' : 'Next'} ▶</button>
+          <button onClick={onExit} className="px-2 py-1.5 rounded text-xs text-slate-400 hover:text-white hover:bg-white/10">✕ {ko ? '종료' : 'Exit'}</button>
+        </div>
+      </div>
+      <div className="h-1 bg-white/10">
+        <span className="block h-full bg-indigo-400 transition-all" style={{ width: ((idx + 1) / total * 100) + '%' }} />
+      </div>
+    </div>
+  );
+};
+
 const JournalPopup = ({ data, onClose }) => {
   if (!data) return null;
   return (
@@ -4368,6 +4447,10 @@ function App() {
     if (!unlocked) focusPin(0);
   }, []);
 
+  /* ---- Story (presentation) mode ---- */
+  const [storyMode, setStoryMode] = useState(false);
+  const [storyIdx, setStoryIdx] = useState(0);
+
   const [mmSteps, setMmSteps] = useState({ me21n:false, migo_gr:false, miro:false, f53:false });
   const [ppSteps, setPpSteps] = useState({
     co01_h:false, gi_h:false, co11n_h:false, gr_h:false,
@@ -4600,14 +4683,15 @@ function App() {
     { id:'home_acct',  label:lang==='ko'?'시작 가이드':'Start Guide', icon:'🧭' },
   ];
 
+  // Ordered to match the 30-min story arc: start → master → business → finance
+  // → journal, with reference material (Tour/Intro) moved to the end.
   const TAB_GROUPS = [
     { id:'grp_home_acct',label:lang==='ko'?'시작 가이드':'Start', icon:'🧭', tabIds:['home_acct'] },
-    { id:'grp_tour',     label:'Tour',     icon:'🗺️', tabIds:['flow','dryrun','script'] },
-    { id:'grp_params',   label:'Intro',    icon:'🎛️', tabIds:['params'] },
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
     { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger'] },
+    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
   const ROLE_GROUPS = [
@@ -4624,8 +4708,10 @@ function App() {
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
 
   return (
-    <div className="min-h-screen">
+    <div className={`min-h-screen ${storyMode ? 'pb-24' : ''}`}>
       {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
+      {storyMode && <StoryBar idx={storyIdx} setIdx={setStoryIdx} setActiveTab={setActiveTab} lang={lang}
+        onExit={() => setStoryMode(false)} />}
 
       <header className="bg-white border-b border-slate-200 text-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-3">
@@ -4660,6 +4746,15 @@ function App() {
                 </button>
               </div>
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
+              {/* Story (presentation) mode — 30-minute one-story walkthrough */}
+              {unlocked && (
+                <button
+                  onClick={() => { setStoryMode(true); setStoryIdx(0); setActiveTab(STORY_CHAPTERS[0].tab); }}
+                  className="flex items-center gap-1 px-3 py-1 rounded-full border border-indigo-300 bg-indigo-50 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition-colors">
+                  🎤 {lang==='ko' ? '발표 모드 (30분)' : 'Present (30 min)'}
+                </button>
+              )}
+              {unlocked && <div className="w-px h-5 bg-slate-200 mx-0.5" />}
               {/* Learning tools (Intro Tour / T-code Map / Lead Guide) — app-switcher style */}
               <LearningToolsSwitcher lang={lang} />
             </div>

@@ -1800,14 +1800,16 @@ const GuideModal = ({ lang, onClose }) => {
    dropdown instead of three separate header pills.
    ========================================================================= */
 const LEARNING_TOOLS = [
-  { id:'intro',   icon:'🎬', ko:'둘러보기',    en:'Intro Tour', color:'indigo' },
-  { id:'mapping', icon:'📑', ko:'T-code 매핑', en:'T-code Map', color:'amber' },
-  { id:'guide',   icon:'📘', ko:'팀장 가이드', en:'Lead Guide', color:'emerald' },
+  { id:'intro',    icon:'🎬', ko:'둘러보기',    en:'Intro Tour', color:'indigo' },
+  { id:'mapping',  icon:'📑', ko:'T-code 매핑', en:'T-code Map', color:'amber' },
+  { id:'guide',    icon:'📘', ko:'팀장 가이드', en:'Lead Guide', color:'emerald' },
+  { id:'glossary', icon:'📖', ko:'용어집',      en:'Glossary',   color:'slate' },
 ];
 const LEARNING_TOOL_COLORS = {
   indigo:'border-indigo-300 bg-indigo-50 hover:border-indigo-400',
   amber:'border-amber-300 bg-amber-50 hover:border-amber-400',
   emerald:'border-emerald-300 bg-emerald-50 hover:border-emerald-400',
+  slate:'border-slate-300 bg-slate-50 hover:border-slate-400',
 };
 const LearningToolsSwitcher = ({ lang }) => {
   const [open, setOpen] = useState(false);
@@ -1825,7 +1827,7 @@ const LearningToolsSwitcher = ({ lang }) => {
         🧰 {lang === 'ko' ? '학습 도구' : 'Learning Tools'}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 grid grid-cols-3 gap-2 z-50">
+        <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 grid grid-cols-4 gap-2 z-50">
           {LEARNING_TOOLS.map(tool => (
             <button key={tool.id} onClick={() => { setModal(tool.id); setOpen(false); }}
               className={`flex flex-col items-center gap-1 rounded-lg border-2 p-2 text-center transition-colors ${LEARNING_TOOL_COLORS[tool.color]}`}>
@@ -1838,6 +1840,7 @@ const LearningToolsSwitcher = ({ lang }) => {
       {modal === 'intro' && <IntroTour lang={lang} onClose={() => setModal(null)} />}
       {modal === 'mapping' && <MappingModal lang={lang} onClose={() => setModal(null)} />}
       {modal === 'guide' && <GuideModal lang={lang} onClose={() => setModal(null)} />}
+      {modal === 'glossary' && <GlossaryModal lang={lang} onClose={() => setModal(null)} />}
     </div>
   );
 };
@@ -2114,6 +2117,13 @@ const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData
   // Next actionable step = first not-yet-done key in the steps object's declared order.
   const firstUndoneKey = Object.keys(steps).find(k => !steps[k]);
   const isNext = !disabled && !done && stepKey === firstUndoneKey;
+  const ctrls = controlsAt(stepKey);
+  const ctrlBadge = ctrls.length > 0 && (
+    <span className="inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold align-middle"
+      title={ctrls.map(c => `${c.id} ${(lang==='ko'?c.ko:c.en).n} — ${(lang==='ko'?c.ko:c.en).c}`).join('\n\n')}>
+      🛡 {ctrls.map(c => c.id).join(', ')}
+    </span>
+  );
   const execute = () => {
     if (disabled) return;
     setSteps(prev => ({ ...prev, [stepKey]: true }));
@@ -2136,6 +2146,7 @@ const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData
     <div className="flex items-center gap-1.5 px-2 py-1 mb-0.5 rounded text-xs text-slate-500">
       <span className="text-green-600 font-bold">✓</span>
       <span>{label}</span>
+      {ctrlBadge}
       {journalData && <button onClick={() => openPopup(journalData)}
         className="px-1.5 py-0.5 rounded text-[11px] text-blue-600 hover:bg-blue-50">{T[lang].journalBtn}</button>}
       <button onClick={cancel} className="px-1.5 py-0.5 rounded text-[11px] text-slate-400 hover:text-red-600 hover:bg-red-50">↺</button>
@@ -2145,6 +2156,7 @@ const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData
     <div className="flex items-center gap-1.5 px-2 py-1 mb-0.5 rounded text-xs text-slate-400/80">
       <span className="text-[11px]">🔒</span>
       <span>{label}</span>
+      {ctrlBadge}
     </div>
   );
   return (
@@ -2153,6 +2165,12 @@ const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData
         ${isNext ? 'py-2.5 text-sm' : 'py-1.5 text-xs'}`}>
       <span>{isNext ? '👉' : '▶'}</span>
       <span>{label}</span>
+      {ctrls.length > 0 && (
+        <span className="shrink-0 px-1.5 py-0.5 rounded bg-white/25 text-[10px] font-semibold"
+          title={ctrls.map(c => `${c.id} ${(lang==='ko'?c.ko:c.en).n} — ${(lang==='ko'?c.ko:c.en).c}`).join('\n\n')}>
+          🛡 {ctrls.map(c => c.id).join(', ')}
+        </span>
+      )}
       {isNext && <span className="ml-auto shrink-0 px-1.5 py-0.5 rounded bg-white/25 text-[10px] font-bold">
         {lang==='ko' ? '다음 할 일' : 'NEXT'}
       </span>}
@@ -3352,54 +3370,163 @@ const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, fico
 /* Document trail: every posting step in business sequence, mapped to the
    journal that produces it. Single source of truth — the ledger reads the
    same buildJournals() output the tab screens do, so amounts can never
-   drift from the parameters entered in the Variables tab. */
+   drift from the parameters entered in the Variables tab.
+
+   `doc` is a neutral document-number prefix (deliberately not SAP's real
+   number ranges, per the de-branding policy) and `ref` names the
+   predecessor document, giving the audit trail PO → GR → IR → payment.
+     PO = purchase order   MD = material document   AC = accounting doc
+     PR = production order SO = sales order         DL = delivery
+     IV = customer invoice CC = cost-centre doc                          */
 const LEDGER_DOCS = [
-  { s:'kp26',       j:'kp26',       mod:'CO'  },
-  { s:'ck11n_h',    j:'ck11n_h',    mod:'CO'  },
-  { s:'ck24_h',     j:'ck24_h',     mod:'CO'  },
-  { s:'ck11n_f',    j:'ck11n_f',    mod:'CO'  },
-  { s:'ck24_f',     j:'ck24_f',     mod:'CO'  },
-  { s:'me21n',      j:'me21n',      mod:'MM'  },
-  { s:'migo_gr',    j:'migo_gr',    mod:'MM'  },
-  { s:'miro',       j:'miro',       mod:'MM'  },
-  { s:'f53',        j:'f53',        mod:'MM'  },
-  { s:'ret_po',     j:'me21n_ret',  mod:'MM'  },
-  { s:'ret_migo',   j:'migo_ret',   mod:'MM'  },
-  { s:'mi01',       j:'mi01',       mod:'MM'  },
-  { s:'mi04',       j:'mi04',       mod:'MM'  },
-  { s:'mi07',       j:'mi07',       mod:'MM'  },
-  { s:'miro_sd',    j:'miro_sd',    mod:'MM'  },
-  { s:'miro_sd2',   j:'miro_sd2',   mod:'MM'  },
-  { s:'f53_sd',     j:'f53_sd',     mod:'MM'  },
-  { s:'co01_h',     j:'co01_h',     mod:'PP'  },
-  { s:'gi_h',       j:'gi_h',       mod:'PP'  },
-  { s:'co11n_h',    j:'co11n_h',    mod:'PP'  },
-  { s:'gr_h',       j:'gr_h',       mod:'PP'  },
-  { s:'co01_f',     j:'co01_f',     mod:'PP'  },
-  { s:'gi_f',       j:'gi_f',       mod:'PP'  },
-  { s:'co11n_f',    j:'co11n_f',    mod:'PP'  },
-  { s:'gr_f',       j:'gr_f',       mod:'PP'  },
-  { s:'ko88_h',     j:'ko88_h',     mod:'CO'  },
-  { s:'ko88_f',     j:'ko88_f',     mod:'CO'  },
-  { s:'kss2',       j:'kss2',       mod:'CO'  },
-  { s:'sl_roh',     j:'sl_roh',     mod:'CO'  },
-  { s:'sl_halb',    j:'sl_halb',    mod:'CO'  },
-  { s:'ml',         j:'ml',         mod:'CO'  },
-  { s:'pc',         j:'ml_pc',      mod:'CO'  },
-  { s:'ke27',       j:'ke27',       mod:'CO'  },
-  { s:'mr21',       j:'mr21',       mod:'CO'  },
-  { s:'fb50',       j:'fb50',       mod:'SGA' },
-  { s:'ksb1',       j:'ksb1',       mod:'SGA' },
-  { s:'ksu5',       j:'ksu5',       mod:'SGA' },
-  { s:'ke30',       j:'ke30',       mod:'SGA' },
-  { s:'va01',       j:'va01',       mod:'SD'  },
-  { s:'vl01n',      j:'vl01n',      mod:'SD'  },
-  { s:'vf01',       j:'vf01',       mod:'SD'  },
-  { s:'f28',        j:'f28',        mod:'SD'  },
-  { s:'ret_so',     j:'va01_ret',   mod:'SD'  },
-  { s:'ret_del',    j:'vl01n_ret',  mod:'SD'  },
-  { s:'ret_credit', j:'vf01_ret',   mod:'SD'  },
+  { s:'kp26',       j:'kp26',       mod:'CO',  doc:'CC' },
+  { s:'ck11n_h',    j:'ck11n_h',    mod:'CO',  doc:'CK', ref:'kp26' },
+  { s:'ck24_h',     j:'ck24_h',     mod:'CO',  doc:'CK', ref:'ck11n_h' },
+  { s:'ck11n_f',    j:'ck11n_f',    mod:'CO',  doc:'CK', ref:'ck24_h' },
+  { s:'ck24_f',     j:'ck24_f',     mod:'CO',  doc:'CK', ref:'ck11n_f' },
+  { s:'me21n',      j:'me21n',      mod:'MM',  doc:'PO' },
+  { s:'migo_gr',    j:'migo_gr',    mod:'MM',  doc:'MD', ref:'me21n' },
+  { s:'miro',       j:'miro',       mod:'MM',  doc:'AC', ref:'migo_gr' },
+  { s:'f53',        j:'f53',        mod:'MM',  doc:'AC', ref:'miro' },
+  { s:'ret_po',     j:'me21n_ret',  mod:'MM',  doc:'PO' },
+  { s:'ret_migo',   j:'migo_ret',   mod:'MM',  doc:'MD', ref:'ret_po' },
+  { s:'mi01',       j:'mi01',       mod:'MM',  doc:'MD' },
+  { s:'mi04',       j:'mi04',       mod:'MM',  doc:'MD', ref:'mi01' },
+  { s:'mi07',       j:'mi07',       mod:'MM',  doc:'AC', ref:'mi04' },
+  { s:'miro_sd',    j:'miro_sd',    mod:'MM',  doc:'AC', ref:'miro' },
+  { s:'miro_sd2',   j:'miro_sd2',   mod:'MM',  doc:'AC', ref:'miro' },
+  { s:'f53_sd',     j:'f53_sd',     mod:'MM',  doc:'AC', ref:'miro_sd' },
+  { s:'co01_h',     j:'co01_h',     mod:'PP',  doc:'PR' },
+  { s:'gi_h',       j:'gi_h',       mod:'PP',  doc:'MD', ref:'co01_h' },
+  { s:'co11n_h',    j:'co11n_h',    mod:'PP',  doc:'AC', ref:'gi_h' },
+  { s:'gr_h',       j:'gr_h',       mod:'PP',  doc:'MD', ref:'co11n_h' },
+  { s:'co01_f',     j:'co01_f',     mod:'PP',  doc:'PR' },
+  { s:'gi_f',       j:'gi_f',       mod:'PP',  doc:'MD', ref:'co01_f' },
+  { s:'co11n_f',    j:'co11n_f',    mod:'PP',  doc:'AC', ref:'gi_f' },
+  { s:'gr_f',       j:'gr_f',       mod:'PP',  doc:'MD', ref:'co11n_f' },
+  { s:'ko88_h',     j:'ko88_h',     mod:'CO',  doc:'AC', ref:'gr_h' },
+  { s:'ko88_f',     j:'ko88_f',     mod:'CO',  doc:'AC', ref:'gr_f' },
+  { s:'kss2',       j:'kss2',       mod:'CO',  doc:'CC' },
+  { s:'sl_roh',     j:'sl_roh',     mod:'CO',  doc:'ML', ref:'kss2' },
+  { s:'sl_halb',    j:'sl_halb',    mod:'CO',  doc:'ML', ref:'sl_roh' },
+  { s:'ml',         j:'ml',         mod:'CO',  doc:'ML', ref:'sl_halb' },
+  { s:'pc',         j:'ml_pc',      mod:'CO',  doc:'AC', ref:'ml' },
+  { s:'ke27',       j:'ke27',       mod:'CO',  doc:'PA', ref:'pc' },
+  { s:'mr21',       j:'mr21',       mod:'CO',  doc:'AC' },
+  { s:'fb50',       j:'fb50',       mod:'SGA', doc:'AC' },
+  { s:'ksb1',       j:'ksb1',       mod:'SGA', doc:'CC', ref:'fb50' },
+  { s:'ksu5',       j:'ksu5',       mod:'SGA', doc:'CC', ref:'fb50' },
+  { s:'ke30',       j:'ke30',       mod:'SGA', doc:'PA', ref:'ksu5' },
+  { s:'va01',       j:'va01',       mod:'SD',  doc:'SO' },
+  { s:'vl01n',      j:'vl01n',      mod:'SD',  doc:'DL', ref:'va01' },
+  { s:'vf01',       j:'vf01',       mod:'SD',  doc:'IV', ref:'vl01n' },
+  { s:'f28',        j:'f28',        mod:'SD',  doc:'AC', ref:'vf01' },
+  { s:'ret_so',     j:'va01_ret',   mod:'SD',  doc:'SO' },
+  { s:'ret_del',    j:'vl01n_ret',  mod:'SD',  doc:'DL', ref:'ret_so' },
+  { s:'ret_credit', j:'vf01_ret',   mod:'SD',  doc:'IV', ref:'ret_del' },
 ];
+
+/* =========================================================================
+   CONTROLS — single source shared by the step badges and the RCM tab.
+   `at` is the step key the control attaches to.
+   ========================================================================= */
+const CONTROLS = [
+  { id:'C-01', at:'miro',    type:'preventive', freq:'transaction', method:'automated',
+    ko:{ n:'3-way 매칭', r:'발주·입고·송장 불일치로 과다 지급', c:'구매오더 수량·단가와 입고 수량, 송장 금액을 시스템이 자동 대조하고 허용범위를 벗어나면 지급을 보류한다.', a:'실재성·정확성' },
+    en:{ n:'3-way match', r:'Overpayment from PO/GR/invoice mismatch', c:'The system matches PO quantity and price against goods receipt and invoice, blocking payment outside tolerance.', a:'Existence, Accuracy' } },
+  { id:'C-02', at:'f53',     type:'preventive', freq:'transaction', method:'manual',
+    ko:{ n:'지급 승인 한도', r:'승인 없는 자금 유출', c:'지급 전표는 금액 구간별 승인 권한자에게 상신되며, 한도를 초과하면 상위 승인이 필요하다.', a:'유효성' },
+    en:{ n:'Payment approval limit', r:'Unauthorised cash disbursement', c:'Payment documents route to an approver by amount band; above the limit a higher approval is required.', a:'Validity' } },
+  { id:'C-03', at:'gr_h',    type:'detective', freq:'transaction', method:'IT-dependent',
+    ko:{ n:'생산실적 확정 검증', r:'허위·중복 생산실적으로 원가 왜곡', c:'입고 수량이 생산오더 잔량을 초과하면 경고하고, 확정 수량과 투입 자재의 정합성을 검토한다.', a:'실재성·평가' },
+    en:{ n:'Production confirmation check', r:'Cost distortion from false or duplicate confirmations', c:'Goods receipt beyond the order’s open quantity is flagged; confirmed output is reconciled to component consumption.', a:'Existence, Valuation' } },
+  { id:'C-04', at:'ko88_h',  type:'detective', freq:'monthly', method:'manual',
+    ko:{ n:'오더 정산 차이 검토', r:'비정상 생산차이 미발견', c:'정산 시 발생한 차이를 표준 대비 임계치와 비교하고, 초과분은 원인(수율·설비·단가)을 규명해 문서화한다.', a:'평가' },
+    en:{ n:'Settlement variance review', r:'Abnormal production variance going unnoticed', c:'Settled variances are compared to a threshold; excesses are investigated by cause (yield, equipment, rate) and documented.', a:'Valuation' } },
+  { id:'C-05', at:'pc',      type:'preventive', freq:'monthly', method:'automated',
+    ko:{ n:'회계기간 마감 잠금', r:'마감 후 소급 전기로 재무제표 변경', c:'결산전기 완료 후 해당 기간은 잠기며, 재오픈은 별도 승인 절차를 거쳐야 한다.', a:'기간귀속' },
+    en:{ n:'Period close lock', r:'Retroactive postings altering closed statements', c:'The period is locked once post closing completes; reopening requires a separate approval.', a:'Cut-off' } },
+  { id:'C-06', at:'mi04',    type:'detective', freq:'periodic', method:'manual',
+    ko:{ n:'재고 실사 대사', r:'장부와 실물 재고 불일치', c:'실사 수량을 장부 수량과 대조하고, 차이는 승인을 거쳐 재고조정 전표로 반영한다.', a:'실재성·완전성' },
+    en:{ n:'Physical inventory count', r:'Book-to-physical inventory difference', c:'Counted quantities are compared to book stock; differences post as an approved inventory adjustment.', a:'Existence, Completeness' } },
+  { id:'C-07', at:'vl01n',   type:'preventive', freq:'transaction', method:'automated',
+    ko:{ n:'여신 한도 점검', r:'회수 불능 매출 발생', c:'출하 전 고객 여신 한도와 미결 채권을 점검하고, 초과 시 출하를 보류한다.', a:'평가' },
+    en:{ n:'Credit limit check', r:'Uncollectible sales', c:'Customer credit limit and open receivables are checked before goods issue; shipment is blocked when exceeded.', a:'Valuation' } },
+  { id:'C-08', at:'vf01',    type:'preventive', freq:'transaction', method:'automated',
+    ko:{ n:'출하-청구 기간귀속', r:'매출 인식 시점 오류', c:'출하(매출원가 인식)와 청구(매출 인식)를 동일 회계기간에 처리하도록 통제하고, 미청구 출하를 기말에 조회한다.', a:'기간귀속' },
+    en:{ n:'Goods issue vs billing cut-off', r:'Revenue recognised in the wrong period', c:'Goods issue and billing are controlled into the same period, with an open-delivery report reviewed at period end.', a:'Cut-off' } },
+  { id:'C-09', at:'ksu5',    type:'detective', freq:'monthly', method:'IT-dependent',
+    ko:{ n:'원가센터 배분 완결성', r:'미배분 간접비 잔액 이월', c:'배분 실행 후 원가센터 Pool 잔액이 0인지 확인하고, 잔액이 남으면 배분 기준을 재검토한다.', a:'완전성' },
+    en:{ n:'Assessment completeness', r:'Unallocated overhead left in the pool', c:'Cost-centre pool balances are confirmed to be nil after assessment; any residue triggers a review of the cycle basis.', a:'Completeness' } },
+  { id:'C-10', at:'ck24_f',  type:'preventive', freq:'annual', method:'manual',
+    ko:{ n:'표준원가 릴리즈 승인', r:'승인 없는 표준 변경으로 재고평가 왜곡', c:'표준원가 계산 결과는 릴리즈 전에 원가책임자 승인을 받으며, 변경 이력과 근거를 보관한다.', a:'평가' },
+    en:{ n:'Standard cost release approval', r:'Unapproved standard change distorting inventory valuation', c:'Calculated standards require cost-owner approval before release, with the change history and basis retained.', a:'Valuation' } },
+];
+const controlsAt = (stepKey) => CONTROLS.filter(c => c.at === stepKey);
+
+/* =========================================================================
+   GLOSSARY — abbreviations that appear across the tabs.
+   ========================================================================= */
+const GLOSSARY = [
+  { k:'PPV',    ko:['구매가격차이','발주가와 표준가의 차이. 입고 시 재고를 표준가로 평가하면서 분리 계상된다.'],
+                en:['Purchase Price Variance','Difference between PO price and standard price, split out when the receipt is valued at standard.'] },
+  { k:'GR/IR',  ko:['입고미착 계정','입고는 되었으나 송장이 도착하지 않은 상태를 잇는 미결 계정. 송장검증 시 상계된다.'],
+                en:['Goods Receipt / Invoice Receipt','Clearing account bridging received-but-not-invoiced goods; cleared at invoice verification.'] },
+  { k:'WIP',    ko:['재공품','생산 중 투입되었으나 아직 완성품으로 입고되지 않은 원가.'],
+                en:['Work In Process','Cost put into production but not yet received as finished output.'] },
+  { k:'BOM',    ko:['자재명세서','완제품 한 단위를 만드는 데 필요한 구성품과 소요량의 목록.'],
+                en:['Bill of Materials','The components and quantities required to build one unit.'] },
+  { k:'ML',     ko:['자재원장','기간 중 발생한 차이를 재고와 소비로 배부해 실제원가를 산출하는 기능.'],
+                en:['Material Ledger','Allocates period variances across inventory and consumption to derive actual cost.'] },
+  { k:'COGS',   ko:['매출원가','판매된 제품에 대응하는 원가. 출하 시 표준가로 인식하고 결산 후 실제로 보정한다.'],
+                en:['Cost of Goods Sold','Cost matched to goods sold — booked at standard on issue, adjusted to actual after close.'] },
+  { k:'CO-PA',  ko:['수익성 분석','제품·고객·지역 등 세그먼트별 마진을 보는 관리회계 영역.'],
+                en:['Profitability Analysis','Management view of margin by segment such as product, customer or region.'] },
+  { k:'SG&A',   ko:['판매관리비','제품에 직접 추적되지 않는 관리·판매 성격의 간접비.'],
+                en:['Selling, General & Administrative','Indirect selling and administrative cost not traced directly to product.'] },
+  { k:'Assessment', ko:['배분','원가센터에 모인 간접비를 통계 기준에 따라 수익성 세그먼트 등으로 넘기는 CO 내부 이동.'],
+                en:['Assessment','CO-internal reallocation of pooled overhead to receivers using a statistical basis.'] },
+  { k:'Cost Center', ko:['원가센터','비용이 발생하고 집계되는 조직 단위. 제조 원가센터와 관리·영업 Pool로 나뉜다.'],
+                en:['Cost Center','Organisational unit where cost is incurred and collected.'] },
+  { k:'Std Cost', ko:['표준원가','사전에 확정한 단위당 원가. 재고평가와 견적의 기준이 되며 기중에는 바뀌지 않는다.'],
+                en:['Standard Cost','Pre-set unit cost used for inventory valuation and quoting; held constant within the period.'] },
+  { k:'Settlement', ko:['정산','생산오더에 남은 실제와 표준의 차이를 원가 대상으로 넘겨 오더를 종결하는 절차.'],
+                en:['Settlement','Clearing the actual-versus-standard difference off a production order to its cost receiver.'] },
+  { k:'AR / AP', ko:['매출채권 / 매입채무','고객에게 받을 돈과 공급업체에 줄 돈.'],
+                en:['Accounts Receivable / Payable','Amounts owed by customers and owed to vendors.'] },
+  { k:'Cut-off', ko:['기간귀속','거래를 올바른 회계기간에 인식했는지에 관한 재무제표 주장.'],
+                en:['Cut-off','The assertion that a transaction is recorded in the correct accounting period.'] },
+];
+const GlossaryModal = ({ lang, onClose }) => {
+  const ko = lang === 'ko';
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+        <div className="bg-slate-800 text-white px-4 py-3 rounded-t-xl flex justify-between items-center shrink-0">
+          <span className="font-bold text-sm">📖 {ko ? '용어집' : 'Glossary'}</span>
+          <button onClick={onClose} className="text-white/80 hover:text-white text-lg leading-none">✕</button>
+        </div>
+        <div className="px-4 py-2 text-[11px] text-slate-500 border-b border-slate-100 shrink-0">
+          {ko ? '화면과 분개에 나오는 약어를 정리했습니다.' : 'Abbreviations used across the screens and journal entries.'}
+        </div>
+        <div className="overflow-auto p-4 space-y-2.5">
+          {GLOSSARY.map(g => {
+            const [term, def] = ko ? g.ko : g.en;
+            return (
+              <div key={g.k} className="border-b border-slate-50 pb-2 last:border-0">
+                <p className="text-sm font-semibold text-slate-800">
+                  <span className="font-mono text-indigo-600">{g.k}</span>
+                  <span className="mx-1.5 text-slate-300">·</span>{term}
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed mt-0.5">{def}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
 // Group Dr/Cr postings by account for the trial balance. Account strings carry
 // a descriptive suffix ("원재료 RM001 (재고)") — strip it so the same GL
 // account aggregates into one line.
@@ -3411,9 +3538,17 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
   const J = buildJournals(simParams, materials, lang);
 
   // Executed documents, in posting sequence, sourced from buildJournals.
+  // Each gets a neutral document number; `refNo` resolves the predecessor
+  // document so the trail reads PO → GR → invoice → payment.
+  const seq = {};
   const docs = LEDGER_DOCS
     .filter(d => allSteps[d.s] && J[d.j])
-    .map(d => ({ ...d, jr: J[d.j][lang] }));
+    .map(d => {
+      seq[d.doc] = (seq[d.doc] || 0) + 1;
+      return { ...d, jr: J[d.j][lang], docNo: `${d.doc}-${String(seq[d.doc]).padStart(4, '0')}` };
+    });
+  const docNoByStep = Object.fromEntries(docs.map(d => [d.s, d.docNo]));
+  docs.forEach(d => { d.refNo = d.ref ? (docNoByStep[d.ref] || null) : null; });
 
   // Flatten to table rows: one row per Dr/Cr line pair inside each document.
   const entries = [];
@@ -3422,12 +3557,14 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
     const crs = (d.jr.lines || []).filter(l => l.type === 'Cr');
     const rows = Math.max(drs.length, crs.length);
     if (rows === 0) {
-      entries.push({ tab:d.mod, desc:d.jr.title, dr:'—', cr:'—', drAmt:'', crAmt:'', memo:ko?'분개 없음':'No posting' });
+      entries.push({ tab:d.mod, docNo:d.docNo, refNo:d.refNo, desc:d.jr.title, dr:'—', cr:'—', drAmt:'', crAmt:'', memo:ko?'분개 없음':'No posting' });
       return;
     }
     for (let i = 0; i < rows; i++) {
       entries.push({
         tab: d.mod,
+        docNo: i === 0 ? d.docNo : '',
+        refNo: i === 0 ? d.refNo : null,
         desc: i === 0 ? d.jr.title : '',
         dr: drs[i] ? drs[i].account : '',
         drAmt: drs[i] ? drs[i].amount : '',
@@ -3494,6 +3631,8 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
               <thead>
                 <tr className="bg-slate-700 text-white">
                   <th className="px-3 py-2 text-left w-14">{t.ledgerColMod}</th>
+                  <th className="px-3 py-2 text-left w-28">{ko ? '전표번호' : 'Doc. No.'}</th>
+                  <th className="px-3 py-2 text-left w-24">{ko ? '선행문서' : 'Ref. Doc.'}</th>
                   <th className="px-3 py-2 text-left">{t.ledgerColDesc}</th>
                   <th className="px-3 py-2 text-left">{t.ledgerColDr}</th>
                   <th className="px-3 py-2 text-right w-24">{t.colAmt}</th>
@@ -3507,6 +3646,8 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
                     <td className="px-3 py-1.5">
                       <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${tabBg[e.tab]||'bg-gray-100 text-gray-600'}`}>{e.tab}</span>
                     </td>
+                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">{e.docNo}</td>
+                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400">{e.refNo || (e.docNo ? '—' : '')}</td>
                     <td className="px-3 py-1.5 text-slate-700">
                       {e.desc}
                       {e.memo && <span className="ml-1.5 text-[10px] text-slate-400 italic">({e.memo})</span>}

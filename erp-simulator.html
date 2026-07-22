@@ -3844,7 +3844,90 @@ const AuditPackage = ({ allSteps, simParams, materials, lang='ko', stamp }) => {
   );
 };
 
-const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko', onPrintAuditPack }) => {
+/* =========================================================================
+   WALKTHROUGH — the sheet an auditor asks for first: one sample transaction
+   followed end to end, with what was checked, the evidence, and whether the
+   control operated. Built from the executed document trail.
+   ========================================================================= */
+const WALKTHROUGH_CHECKS = {
+  me21n:   { ko:['공급업체·수량·단가가 승인된 조건과 일치하는가','구매오더'], en:['Vendor, quantity and price agree to approved terms','Purchase order'] },
+  migo_gr: { ko:['입고 수량이 발주 수량 범위 내인가, 재고가 표준가로 평가되었는가','입고 전표 · 검수 기록'], en:['Received quantity within ordered quantity; stock valued at standard','Goods receipt document, inspection record'] },
+  miro:    { ko:['발주·입고·송장 3자 대사가 일치하는가','공급업체 송장'], en:['Purchase order, receipt and invoice agree','Vendor invoice'] },
+  f53:     { ko:['지급 금액과 승인 권한자가 적정한가','지급 전표 · 승인 기록'], en:['Payment amount and approver are appropriate','Payment document, approval record'] },
+  gi_h:    { ko:['출고 수량이 BOM 표준 소요량과 일치하는가','자재 출고 전표'], en:['Issued quantity agrees to BOM standard usage','Material issue document'] },
+  co11n_h: { ko:['확정 시간이 작업일보와 일치하는가','생산 확정 기록'], en:['Confirmed hours agree to the shop-floor record','Production confirmation'] },
+  gr_h:    { ko:['입고 수량이 오더 잔량 이내이며 표준가로 평가되었는가','입고 전표'], en:['Receipt within open order quantity, valued at standard','Goods receipt document'] },
+  ko88_h:  { ko:['정산 차이가 임계치 이내인가, 초과 시 원인이 규명되었는가','정산 명세 · 차이 분석'], en:['Settled variance within threshold; excess investigated','Settlement report, variance analysis'] },
+  pc:      { ko:['결산전기 후 해당 기간이 잠겼는가','결산 로그 · 기간 상태'], en:['Period locked after post closing','Close log, period status'] },
+  ksu5:    { ko:['배분 후 원가센터 Pool 잔액이 0인가','배분 명세'], en:['Cost-centre pool nil after assessment','Assessment report'] },
+  vl01n:   { ko:['출하 전 여신 한도를 통과했는가, 매출원가가 인식되었는가','출하 전표 · 여신 점검'], en:['Credit check passed before shipment; COGS recognised','Delivery document, credit check'] },
+  vf01:    { ko:['청구가 출하와 동일 회계기간인가','고객 송장'], en:['Billing falls in the same period as the goods issue','Customer invoice'] },
+  f28:     { ko:['수취 금액이 채권 잔액과 일치하는가','입금 전표 · 은행 명세'], en:['Receipt agrees to the open receivable','Incoming payment, bank statement'] },
+};
+const WalkthroughTab = ({ allSteps, simParams, materials, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const { docs } = buildLedger(allSteps, simParams, materials, lang);
+  const rows = docs.filter(d => WALKTHROUGH_CHECKS[d.s]);
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h2 className="text-base font-bold text-slate-800">🔎 {ko ? '워크스루 시트' : 'Walkthrough Sheet'}</h2>
+        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+          {ko ? '표본 거래 한 건을 처음부터 끝까지 따라가며, 각 단계에서 무엇을 확인했고 어떤 증빙이 남는지, 통제가 작동했는지를 정리합니다. 감사인이 설계 유효성을 판단할 때 가장 먼저 요구하는 문서입니다.'
+              : 'Follows one sample transaction end to end, recording what was checked at each step, the evidence it leaves, and whether a control operated. This is the first document an auditor asks for when assessing design effectiveness.'}
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-sm text-slate-400">
+          {ko ? '아직 실행된 거래가 없습니다. 각 탭에서 단계를 실행하면 워크스루가 채워집니다.' : 'No transactions executed yet — run the steps on each tab and the walkthrough fills in.'}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <table className="w-full text-xs min-w-[760px]">
+            <thead>
+              <tr className="bg-slate-700 text-white text-left">
+                <th className="px-3 py-2 w-24">{ko ? '전표번호' : 'Doc No.'}</th>
+                <th className="px-3 py-2 w-44">{ko ? '단계' : 'Step'}</th>
+                <th className="px-3 py-2">{ko ? '무엇을 확인했나' : 'What was checked'}</th>
+                <th className="px-3 py-2 w-40">{ko ? '증빙' : 'Evidence'}</th>
+                <th className="px-3 py-2 w-28">{ko ? '통제' : 'Control'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((d, i) => {
+                const chk = WALKTHROUGH_CHECKS[d.s][lang] || WALKTHROUGH_CHECKS[d.s].ko;
+                const ctrls = controlsAt(d.s);
+                return (
+                  <tr key={d.docNo} className={`align-top border-b border-slate-50 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}>
+                    <td className="px-3 py-2 font-mono text-slate-500">
+                      {d.docNo}
+                      {d.refNo && <span className="block text-[10px] text-slate-400">← {d.refNo}</span>}
+                    </td>
+                    <td className="px-3 py-2 font-medium text-slate-800">{d.jr.title}</td>
+                    <td className="px-3 py-2 text-slate-600 leading-relaxed">{chk[0]}</td>
+                    <td className="px-3 py-2 text-slate-500">{chk[1]}</td>
+                    <td className="px-3 py-2">
+                      {ctrls.length
+                        ? <span className="text-green-700 font-semibold">✅ {ctrls.map(c => c.id).join(', ')}</span>
+                        : <span className="text-slate-400">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[11px] text-slate-400">
+        {ko ? '전표번호 아래 화살표는 선행 문서를 가리킵니다. 통제 열의 번호는 통제 매트릭스 탭의 통제번호입니다.'
+            : 'The arrow under a document number points to its predecessor. Control IDs refer to the Control Matrix tab.'}
+      </p>
+    </div>
+  );
+};
+
+const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko', onPrintAuditPack, onExportSnapshot, onImportSnapshot }) => {
   const t = T[lang];
   const ko = lang === 'ko';
   const { entries, tbRows, totalDr, totalCr, balanced } = buildLedger(allSteps, simParams, materials, lang);
@@ -3882,6 +3965,16 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko', onPrintAud
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800">
             📋 {ko ? '감사 패키지 인쇄' : 'Print audit pack'}
           </button>
+          <button onClick={onExportSnapshot}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50"
+            title={ko ? '현재 변수와 실행 상태를 파일로 저장해 같은 결과를 재현할 수 있게 합니다' : 'Save the current parameters and progress so the same figures can be reproduced'}>
+            💾 {ko ? '스냅샷 저장' : 'Save snapshot'}
+          </button>
+          <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50 cursor-pointer">
+            📂 {ko ? '불러오기' : 'Load'}
+            <input type="file" accept="application/json,.json" className="hidden"
+              onChange={e => { const f = e.target.files[0]; if (f) onImportSnapshot(f); e.target.value = ''; }} />
+          </label>
         </div>
       </div>
 
@@ -4702,7 +4795,117 @@ const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
    Standalone educational module. Canonical KRW dataset (audit-report spec).
    Toggle default = ML ON (company's live system reality).
    ========================================================================= */
-const CostModelTab = ({ lang='ko' }) => {
+/* =========================================================================
+   VARIANCE ALLOCATION — the question auditors actually ask: was the
+   standard-vs-actual difference expensed straight to COGS, or split across
+   remaining inventory and goods sold? Figures come from the live parameters.
+   ========================================================================= */
+const VarianceAllocation = ({ simParams, materials, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const [allToCogs, setAllToCogs] = useState(false);
+  const stdOfM = (c) => parseFloat((materials.find(m => m.MaterialCode === c) || { StandardPrice:'0' }).StandardPrice);
+
+  const mm0 = simParams.mm[0] || { qty:100, stdPrice:5.50, poPrice:5.00 };
+  const ppH = simParams.pp.find(o => o.outCode === 'SF001') || simParams.pp[0] || { outQty:20, components:[], laborHr:20, laborRate:14.675, machineHr:10, machineRate:14 };
+  const ppF = simParams.pp.find(o => o.outCode === 'FG001') || simParams.pp[1] || { outQty:10, components:[], laborHr:5, laborRate:25, machineHr:2.5, machineRate:35 };
+  const sd0 = simParams.sd[0] || { matCode:'FG001', qty:5 };
+
+  const comp = (o) => (o.components || []).reduce((s, c) => s + c.consumQty * stdOfM(c.code), 0);
+  const act  = (o) => o.laborHr * o.laborRate + o.machineHr * o.machineRate;
+  const ppv  = +(mm0.qty * (mm0.stdPrice - mm0.poPrice)).toFixed(2);      // favourable = positive
+  const hVar = +((comp(ppH) + act(ppH)) - ppH.outQty * stdOfM('SF001')).toFixed(2);
+  const fVar = +((comp(ppF) + act(ppF)) - ppF.outQty * stdOfM('FG001')).toFixed(2);
+  const net  = +(hVar + fVar - ppv).toFixed(2);                            // unfavourable = positive
+
+  const producedQty = ppF.outQty || 0;
+  const soldQty     = Math.min(sd0.qty || 0, producedQty);
+  const soldRatio   = producedQty > 0 ? soldQty / producedQty : 0;
+  const toCogs = allToCogs ? net : +(net * soldRatio).toFixed(2);
+  const toInv  = allToCogs ? 0   : +(net - toCogs).toFixed(2);
+
+  const bars = [
+    { label: ko ? '구매가격차이 (PPV)' : 'Purchase price variance', v: -ppv, hint: ko ? '발주가와 표준가의 차이' : 'PO price vs standard' },
+    { label: ko ? '생산차이 — 반제품'   : 'Production variance — SF', v: hVar, hint: ko ? '실제 투입 − 표준' : 'Actual input − standard' },
+    { label: ko ? '생산차이 — 완제품'   : 'Production variance — FG', v: fVar, hint: ko ? '실제 투입 − 표준' : 'Actual input − standard' },
+  ];
+  const scale = Math.max(1, ...bars.map(b => Math.abs(b.v)), Math.abs(net));
+  const money = (v) => `${v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
+
+  return (
+    <Card title={`⚖️ ${ko ? '차이 배부 — 재고 vs 매출원가' : 'Variance allocation — inventory vs COGS'}`}>
+      <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+        {ko ? '감사인이 가장 먼저 묻는 항목입니다. 기중에 쌓인 차이를 기말에 어디로 보냈는지에 따라 재고자산과 당기손익이 달라집니다.'
+            : 'The first thing an auditor asks. Where the period’s accumulated variance lands decides both closing inventory and current-period profit.'}
+      </p>
+
+      {/* Waterfall */}
+      <div className="space-y-1.5 mb-4">
+        {bars.map((b, i) => (
+          <div key={i} className="flex items-center gap-2 text-xs">
+            <span className="w-40 shrink-0 text-slate-600">{b.label}</span>
+            <div className="flex-1 h-5 bg-slate-100 rounded relative overflow-hidden">
+              <span className={`absolute inset-y-0 ${b.v >= 0 ? 'bg-red-400 left-1/2' : 'bg-green-400 right-1/2'}`}
+                style={{ width: (Math.abs(b.v) / scale * 50) + '%' }} />
+              <span className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
+            </div>
+            <span className={`w-24 text-right font-semibold ${b.v >= 0 ? 'text-red-600' : 'text-green-600'}`}>{money(b.v)}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 text-xs border-t border-slate-200 pt-1.5">
+          <span className="w-40 shrink-0 font-bold text-slate-700">{ko ? '순차이 합계' : 'Net variance'}</span>
+          <div className="flex-1" />
+          <span className={`w-24 text-right font-bold ${net >= 0 ? 'text-red-700' : 'text-green-700'}`}>{money(net)}</span>
+        </div>
+        <p className="text-[10px] text-slate-400">
+          {ko ? '양수 = 불리(원가 증가), 음수 = 유리(원가 감소)' : 'Positive = unfavourable (cost up), negative = favourable (cost down)'}
+        </p>
+      </div>
+
+      {/* Policy toggle */}
+      <div className="flex items-center gap-1 mb-3 text-xs">
+        <span className="text-slate-500 mr-1">{ko ? '배부 정책' : 'Allocation policy'}</span>
+        <button onClick={() => setAllToCogs(false)}
+          className={`px-2.5 py-1 rounded-l border ${!allToCogs ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-300'}`}>
+          {ko ? '재고 안분' : 'Split to inventory'}
+        </button>
+        <button onClick={() => setAllToCogs(true)}
+          className={`px-2.5 py-1 rounded-r border -ml-px ${allToCogs ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-300'}`}>
+          {ko ? '전액 매출원가' : 'All to COGS'}
+        </button>
+      </div>
+
+      <table className="w-full text-xs">
+        <tbody>
+          <tr className="border-b border-slate-100">
+            <td className="py-1.5 text-slate-600">{ko ? '매출원가로 (소비분)' : 'To COGS (sold portion)'}</td>
+            <td className="py-1.5 text-right font-semibold text-red-600">{money(toCogs)}</td>
+          </tr>
+          <tr className="border-b border-slate-100">
+            <td className="py-1.5 text-slate-600">{ko ? '재고자산으로 (기말 재고분)' : 'To inventory (closing stock)'}</td>
+            <td className="py-1.5 text-right font-semibold text-slate-800">{money(toInv)}</td>
+          </tr>
+          <tr>
+            <td className="py-1.5 text-slate-500 text-[11px]">
+              {ko ? `배부 기준: 생산 ${producedQty}EA 중 판매 ${soldQty}EA = ${(soldRatio * 100).toFixed(0)}%`
+                  : `Basis: ${soldQty} of ${producedQty} EA sold = ${(soldRatio * 100).toFixed(0)}%`}
+            </td>
+            <td />
+          </tr>
+        </tbody>
+      </table>
+
+      <div className={`mt-3 p-2.5 rounded text-xs leading-relaxed border ${allToCogs ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+        {allToCogs
+          ? (ko ? `⚠ 전액을 매출원가로 처리하면 당기손익이 ${money(toInv === 0 ? +(net * (1 - soldRatio)).toFixed(2) : toInv)}만큼 추가로 감소하고, 기말재고는 표준원가에 머뭅니다. 차이가 중요하지 않은 경우에만 허용되며, 감사인은 그 중요성 판단 근거를 요구합니다.`
+                : `⚠ Expensing everything moves an extra ${money(+(net * (1 - soldRatio)).toFixed(2))} into current profit and leaves closing inventory at standard. Acceptable only when the variance is immaterial — expect the auditor to ask how you concluded that.`)
+          : (ko ? '✔ 판매분과 재고분으로 안분하면 기말재고가 실제원가에 근접하며, 이는 GAAP상 표준원가가 실제원가를 근사해야 한다는 요건에 부합합니다.'
+                : '✔ Splitting between sold and on-hand moves closing inventory toward actual cost, which is what GAAP expects when a standard cost system is used.')}
+      </div>
+    </Card>
+  );
+};
+
+const CostModelTab = ({ lang='ko', simParams, materials }) => {
   const [mlOn, setMlOn] = useState(true); // default Material Ledger (company reality)
   const ko = lang === 'ko';
   const won = (v) => v.toLocaleString() + (ko ? '원' : ' KRW');
@@ -4908,6 +5111,9 @@ const CostModelTab = ({ lang='ko' }) => {
             : 'The audit report revalues raw and semi-finished materials to actual (manual price change) but not finished goods. Yet if you accept revaluing RM·SF ending inventory (i.e., inventory accuracy and downstream distortion matter), the same logic demands revaluing FG too. Either "pure classic" (nothing revalued) or "Material Ledger" (all levels revalued consistently) is internally consistent. ML resolves RM→SF→FG in one period-end run (F28~F31), eliminating the contradiction.'}
         </p>
       </div>
+
+      {/* Where the variance actually lands — driven by the live parameters */}
+      <VarianceAllocation simParams={simParams} materials={materials} lang={lang} />
     </div>
   );
 };
@@ -5146,6 +5352,51 @@ function App() {
   const allSteps = { ...ckSteps, ...mmSteps, ...mmReturnSteps, ...miSteps, ...sdebSteps,
     ...ppSteps, ...ficoSteps, ...mr21Steps, ...overheadSteps, ...sdSteps, ...sdReturnSteps };
 
+  /* ---- Snapshot: export/import the exact state behind a printed pack, so a
+     reviewer can reproduce the same figures rather than take them on trust. */
+  const exportSnapshot = () => {
+    const snap = {
+      kind: 'erp-simulator-snapshot', version: 1,
+      exportedAt: new Date().toISOString(),
+      materials, simParams,
+      steps: { ckSteps, mmSteps, mmReturnSteps, miSteps, sdebSteps, ppSteps,
+               ficoSteps, mr21Steps, overheadSteps, sdSteps, sdReturnSteps },
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(snap, null, 2)], { type:'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `erp-simulator-snapshot-${snap.exportedAt.slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const importSnapshot = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const s = JSON.parse(reader.result);
+        if (s.kind !== 'erp-simulator-snapshot') throw new Error('not a snapshot file');
+        if (s.materials) setMaterials(s.materials);
+        if (s.simParams) setSimParams(s.simParams);
+        const st = s.steps || {};
+        if (st.ckSteps) setCkSteps(st.ckSteps);
+        if (st.mmSteps) setMmSteps(st.mmSteps);
+        if (st.mmReturnSteps) setMmReturnSteps(st.mmReturnSteps);
+        if (st.miSteps) setMiSteps(st.miSteps);
+        if (st.sdebSteps) setSdebSteps(st.sdebSteps);
+        if (st.ppSteps) setPpSteps(st.ppSteps);
+        if (st.ficoSteps) setFicoSteps(st.ficoSteps);
+        if (st.mr21Steps) setMr21Steps(st.mr21Steps);
+        if (st.overheadSteps) setOverheadSteps(st.overheadSteps);
+        if (st.sdSteps) setSdSteps(st.sdSteps);
+        if (st.sdReturnSteps) setSdReturnSteps(st.sdReturnSteps);
+      } catch (err) {
+        console.error('Snapshot import failed:', err);
+        alert(lang === 'ko' ? '스냅샷 파일을 읽을 수 없습니다.' : 'Could not read that snapshot file.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // Print the audit dossier: stamp it, swap the print target, restore after.
   const [packStamp, setPackStamp] = useState('');
   const printAuditPack = () => {
@@ -5364,6 +5615,7 @@ function App() {
     { id:'fico',    label:tabLabels[3], icon:'🧮' },
     { id:'overhead', label:lang==='ko'?'일반경비':'General/Overhead Expense', icon:'🧾' },
     { id:'rcm',     label:lang==='ko'?'통제 매트릭스':'Control Matrix', icon:'🛡' },
+    { id:'walkthrough', label:lang==='ko'?'워크스루':'Walkthrough', icon:'🔎' },
     { id:'sd',      label:tabLabels[4], icon:'💵' },
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
@@ -5382,7 +5634,7 @@ function App() {
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
-    { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm'] },
+    { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
     { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
@@ -5392,7 +5644,7 @@ function App() {
     { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
-    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm'] },
+    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm','walkthrough'] },
     { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
@@ -5545,13 +5797,14 @@ function App() {
         {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} simParams={simParams} materials={materials} />}
         {activeTab==='overhead' && <OverheadTab overheadSteps={overheadSteps} setOverheadSteps={setOverheadSteps} openPopup={openPopup} lang={lang} simParams={simParams} materials={materials} />}
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
-        {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} onPrintAuditPack={printAuditPack} />}
+        {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} onPrintAuditPack={printAuditPack} onExportSnapshot={exportSnapshot} onImportSnapshot={importSnapshot} />}
         {activeTab==='rcm' && <RcmTab allSteps={allSteps} setActiveTab={setActiveTab} lang={lang} />}
+        {activeTab==='walkthrough' && <WalkthroughTab allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}
         {activeTab==='script' && <ScriptTab lang={lang} />}
         {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
-        {activeTab==='costmodel' && <CostModelTab lang={lang} />}
+        {activeTab==='costmodel' && <CostModelTab lang={lang} simParams={simParams} materials={materials} />}
       </main>
       </div>
 

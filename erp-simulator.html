@@ -1843,6 +1843,110 @@ const LearningToolsSwitcher = ({ lang }) => {
 };
 
 /* =========================================================================
+   LANDING (pre-PIN) — what the tool is, what you'll learn, how long it takes.
+   Everything here is reachable without the PIN; the PIN only unlocks the
+   hands-on practice system.
+   ========================================================================= */
+const LEARNING_OUTCOMES = [
+  { icon:'🧱', ko:['표준원가가 어떻게 만들어지는지 설명할 수 있다','BOM·공정·활동단가에서 반제품·완제품 표준원가까지'],
+              en:['Explain how a standard cost is built','From BOM, routing and activity rates up to SF/FG standard cost'] },
+  { icon:'📖', ko:['구매·생산·판매 각 시점의 분개를 읽을 수 있다','어느 계정이 왜 차변/대변에 오는지 근거와 함께'],
+              en:['Read the journal entry at each buy/make/sell moment','Which account moves, on which side, and why'] },
+  { icon:'🔍', ko:['차이(Variance)가 어디서 생겨 어디로 가는지 추적할 수 있다','구매가격차이·생산차이 → 재고와 매출원가로의 배부까지'],
+              en:['Trace where a variance arises and where it lands','Purchase and production variance through to inventory and COGS'] },
+  { icon:'📆', ko:['월마감 순서를 말할 수 있다','표준원가 → 거래 → 오더정산 → ML 결산 → 수익성 분석'],
+              en:['Walk through the month-end close in order','Standard cost → transactions → settlement → ML close → profitability'] },
+  { icon:'📈', ko:['수익성 보고서를 해석할 수 있다','표준마진과 실제마진이 벌어지는 이유를 설명'],
+              en:['Interpret the profitability report','Explain why standard margin and actual margin diverge'] },
+];
+const LandingHero = ({ lang, onFocusPin }) => {
+  const ko = lang === 'ko';
+  const storyMin = STORY_CHAPTERS.reduce((s, c) => s + c.min, 0);
+  return (
+    <div className="space-y-6">
+      {/* Hero */}
+      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 sm:px-10 sm:py-10">
+        <span className="inline-block text-[11px] font-bold tracking-[0.2em] text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">
+          {ko ? 'ERP 프로세스 학습 시뮬레이터' : 'ERP PROCESS LEARNING SIMULATOR'}
+        </span>
+        <h2 className="mt-4 text-2xl sm:text-3xl font-extrabold text-slate-800 leading-snug">
+          {ko ? <>자동차부품 제조사의 한 분기를<br className="hidden sm:block" /> 구매부터 손익까지 <span className="text-indigo-600">분개로 따라갑니다</span></>
+              : <>Follow one quarter of an auto-parts plant<br className="hidden sm:block" /> from purchasing to profit — <span className="text-indigo-600">entry by entry</span></>}
+        </h2>
+        <p className="mt-3 text-sm text-slate-600 leading-relaxed max-w-2xl">
+          {ko ? '자재를 사고, 반제품과 완제품을 만들고, 원가를 결산하고, 파는 전 과정을 실제 회계 전표와 함께 단계별로 실행해 봅니다. 화면마다 지금 할 일 하나만 보여주므로 ERP가 처음이어도 순서를 잃지 않습니다.'
+              : 'Buy materials, build semi-finished and finished goods, close the costing, and sell — every step executed with the actual accounting entry beside it. Each screen shows only the one next action, so first-timers never lose the thread.'}
+        </p>
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <IntroButton lang={lang} cta />
+          <button onClick={onFocusPin}
+            className="px-5 py-2.5 rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+            🔐 {ko ? 'PIN 입력하고 실습 시작' : 'Enter PIN to practise'}
+          </button>
+        </div>
+        {/* Time badges */}
+        <div className="mt-5 flex flex-wrap gap-2 text-[11px]">
+          {[
+            { t:'40' + (ko?'초':'s'),  l: ko ? '둘러보기 — 전체 구조 미리보기' : 'Tour — see the whole structure' },
+            { t: storyMin + (ko?'분':' min'), l: ko ? '발표 모드 — 9챕터 한 스토리' : 'Story mode — 9 chapters, one story' },
+            { t: ko ? '90분' : '90 min', l: ko ? '직접 실습 — 전 단계 실행' : 'Hands-on — run every step' },
+          ].map((b, i) => (
+            <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
+              <strong className="text-slate-800">{b.t}</strong><span className="text-slate-500">{b.l}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Learning outcomes */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-800 mb-1">{ko ? '이 과정을 마치면' : "What you'll be able to do"}</h3>
+        <p className="text-xs text-slate-500 mb-3">{ko ? '실무에서 바로 쓰는 5가지' : 'Five things you can use at work'}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {LEARNING_OUTCOMES.map((o, i) => {
+            const [head, sub] = ko ? o.ko : o.en;
+            return (
+              <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-2xl mb-2">{o.icon}</div>
+                <p className="text-sm font-semibold text-slate-800 leading-snug">{head}</p>
+                <p className="mt-1 text-xs text-slate-500 leading-relaxed">{sub}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Curriculum preview — reuses the story chapters, no separate data */}
+      <details className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-between">
+          <span>📋 {ko ? '전체 커리큘럼 9챕터 미리보기' : 'Preview all 9 chapters'}</span>
+          <span className="text-[11px] font-normal text-slate-400">{ko ? '총 ' : 'Total '}{storyMin}{ko ? '분' : ' min'}</span>
+        </summary>
+        <ol className="border-t border-slate-100 divide-y divide-slate-50">
+          {STORY_CHAPTERS.map((c, i) => (
+            <li key={i} className="flex items-center gap-3 px-4 py-2">
+              <span className="w-6 shrink-0 text-center text-[11px] font-bold text-slate-400">{i + 1}</span>
+              <span className="text-lg shrink-0">{c.icon}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-slate-700">{ko ? c.ko : c.en}</span>
+                <span className="block text-[11px] text-slate-500 truncate">{(ko ? c.pointsKo : c.pointsEn)[0]}</span>
+              </span>
+              <span className="shrink-0 text-[11px] text-slate-400">{c.min}{ko ? '분' : 'm'}</span>
+            </li>
+          ))}
+        </ol>
+      </details>
+
+      {/* Trust / provenance */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500 leading-relaxed">
+        {ko ? '미국 자동차부품 제조업 기준의 가상 회사·가상 거래로 구성한 독립 교육용 시뮬레이터입니다. 실제 회계기록이 아니며, SAP SE 및 Oracle과 제휴·후원·보증 관계가 없습니다. PIN은 실습 모드 접근용으로, 강사 또는 배포자에게 문의하세요.'
+            : 'An independent training simulator built on a fictitious US auto-parts manufacturer with fictitious transactions. It is not an accounting record, and is not affiliated with, sponsored by, or endorsed by SAP SE or Oracle. The PIN unlocks the practice mode — ask your instructor or the distributor.'}
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
    STORY MODE (30-minute one-story presentation)
    9 chapters totaling exactly 30 min. The bottom StoryBar drives activeTab
    through the narrative with per-chapter talking points and a live timer.
@@ -4934,7 +5038,7 @@ function App() {
               </span>
             ) : (
               <div className="flex items-center gap-2" ref={pinContainerRef}>
-                <span className="text-xs text-slate-500">🔐 PIN:</span>
+                <span className="text-xs text-slate-500">🔐 {lang==='ko' ? '실습 모드 잠금 해제' : 'Unlock practice mode'}</span>
                 {pinDigits.map((d, i) => (
                   <input key={i} type="password" inputMode="numeric" maxLength={1} value={d}
                     autoFocus={i === 0}
@@ -4944,7 +5048,7 @@ function App() {
                       ${pinError ? 'border-red-400 bg-red-50 animate-pulse' : 'border-slate-300 focus:border-indigo-500'}`}
                   />
                 ))}
-                <span className="text-xs text-slate-400">{lang==='ko' ? '4자리 입력' : 'Enter 4 digits'}</span>
+                <span className="text-xs text-slate-400">{lang==='ko' ? '강사에게 받은 4자리 PIN' : '4-digit PIN from your instructor'}</span>
                 {pinError && <span className="text-xs text-red-500 font-semibold">❌</span>}
               </div>
             )}
@@ -5005,21 +5109,7 @@ function App() {
         </aside>
 
       <main className="flex-1 min-w-0 py-5 relative">
-        {!unlocked && (
-          <div className="absolute inset-0 bg-slate-100/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-lg" style={{minHeight:'300px'}}>
-            <div className="text-6xl mb-4">🔐</div>
-            <p className="text-base font-semibold text-slate-600">
-              {lang==='ko' ? 'PIN을 입력하면 메뉴가 활성화됩니다' : 'Enter PIN above to activate the menu'}
-            </p>
-            <p className="text-xs text-slate-400 mt-1 mb-5">
-              {lang==='ko' ? '상단의 4자리 PIN 입력란을 이용하세요' : 'Use the 4-digit PIN field at the top'}
-            </p>
-            <IntroButton lang={lang} cta />
-            <p className="text-[11px] text-slate-400 mt-2">
-              {lang==='ko' ? 'PIN 없이도 전체 구조를 미리 볼 수 있어요' : 'Preview the full structure — no PIN needed'}
-            </p>
-          </div>
-        )}
+        {!unlocked && <LandingHero lang={lang} onFocusPin={() => focusPin(0)} />}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
         {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
         {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}

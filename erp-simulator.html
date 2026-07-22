@@ -77,6 +77,9 @@
     background: rgba(255,255,255,0.9); border-color: #e2e8f0; color: #64748b;
   }
 
+  /* The audit dossier exists only for the printer */
+  #audit-package { display: none; }
+
   /* ── Print (audit hand-out) ──
      Strip interactive chrome, force light ink-friendly colours, and stamp
      every page so a printed copy can never be mistaken for a real record. */
@@ -93,6 +96,9 @@
     table { page-break-inside: auto; }
     tr, .avoid-break { page-break-inside: avoid; }
     thead { display: table-header-group; }
+    /* Audit package: print the dossier alone, not the surrounding app */
+    body.print-pack #app-shell > *:not(#audit-package) { display: none !important; }
+    body.print-pack #audit-package { display: block !important; }
     /* Disclaimer stamped on every printed page */
     body::after {
       content: "교육용 가상 시나리오 — 실제 회계기록이 아닙니다 · Illustrative training scenario — not an accounting record";
@@ -3532,8 +3538,105 @@ const GlossaryModal = ({ lang, onClose }) => {
 // account aggregates into one line.
 const acctKey = (a) => String(a).replace(/\s*[(（].*$/, '').trim();
 
-const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
-  const t = T[lang];
+/* =========================================================================
+   RISK CONTROL MATRIX (audit reference) — renders CONTROLS in the column
+   layout an auditor expects, and links each control to its process step.
+   ========================================================================= */
+const RCM_TYPE = {
+  preventive: { ko:'예방', en:'Preventive' },
+  detective:  { ko:'적발', en:'Detective' },
+};
+const RCM_FREQ = {
+  transaction:{ ko:'거래별', en:'Per transaction' },
+  monthly:    { ko:'월별',   en:'Monthly' },
+  periodic:   { ko:'주기적', en:'Periodic' },
+  annual:     { ko:'연간',   en:'Annual' },
+};
+const RCM_METHOD = {
+  manual:          { ko:'수동',      en:'Manual' },
+  automated:       { ko:'자동',      en:'Automated' },
+  'IT-dependent':  { ko:'IT 의존',   en:'IT-dependent' },
+};
+// Which tab each control's step lives on, so a control can deep-link to it.
+const CONTROL_TAB = {
+  miro:'mm', f53:'mm', mi04:'mm', gr_h:'pp', ko88_h:'pp',
+  pc:'fico', ck24_f:'master', vl01n:'sd', vf01:'sd', ksu5:'overhead',
+};
+const RcmTab = ({ allSteps, setActiveTab, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const done = CONTROLS.filter(c => allSteps[c.at]).length;
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h2 className="text-base font-bold text-slate-800">🛡 {ko ? '통제 매트릭스 (Risk Control Matrix)' : 'Risk Control Matrix'}</h2>
+        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+          {ko ? '이 시나리오에 내재된 통제점을 감사 문서 형식으로 정리했습니다. 각 통제는 실제 실행 단계와 연결되어 있어, 통제가 어느 화면에서 작동하는지 바로 확인할 수 있습니다.'
+              : 'The control points embedded in this scenario, laid out the way an audit file expects. Each control links to the step where it operates.'}
+        </p>
+        <p className="text-[11px] text-slate-400 mt-2">
+          {ko ? `총 ${CONTROLS.length}개 통제 중 ${done}개가 이번 실행에서 작동했습니다.` : `${done} of ${CONTROLS.length} controls exercised in this run.`}
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table className="w-full text-xs min-w-[900px]">
+          <thead>
+            <tr className="bg-slate-700 text-white text-left">
+              <th className="px-3 py-2 w-16">{ko ? '통제번호' : 'Ctrl ID'}</th>
+              <th className="px-3 py-2 w-40">{ko ? '통제명' : 'Control'}</th>
+              <th className="px-3 py-2">{ko ? '리스크' : 'Risk'}</th>
+              <th className="px-3 py-2">{ko ? '통제 기술' : 'Control description'}</th>
+              <th className="px-3 py-2 w-16">{ko ? '유형' : 'Type'}</th>
+              <th className="px-3 py-2 w-20">{ko ? '빈도' : 'Frequency'}</th>
+              <th className="px-3 py-2 w-20">{ko ? '방법' : 'Method'}</th>
+              <th className="px-3 py-2 w-24">{ko ? '재무제표 주장' : 'Assertion'}</th>
+              <th className="px-3 py-2 w-20">{ko ? '작동' : 'Exercised'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CONTROLS.map((c, i) => {
+              const x = ko ? c.ko : c.en;
+              const hit = !!allSteps[c.at];
+              const tab = CONTROL_TAB[c.at];
+              return (
+                <tr key={c.id} className={`align-top border-b border-slate-50 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}>
+                  <td className="px-3 py-2 font-mono text-slate-500">{c.id}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-800">{x.n}</td>
+                  <td className="px-3 py-2 text-slate-600">{x.r}</td>
+                  <td className="px-3 py-2 text-slate-600 leading-relaxed">{x.c}</td>
+                  <td className="px-3 py-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${c.type === 'preventive' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {RCM_TYPE[c.type][lang]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">{RCM_FREQ[c.freq][lang]}</td>
+                  <td className="px-3 py-2 text-slate-600">{RCM_METHOD[c.method][lang]}</td>
+                  <td className="px-3 py-2 text-slate-600">{x.a}</td>
+                  <td className="px-3 py-2">
+                    {hit
+                      ? <span className="text-green-600 font-semibold">✅ {ko ? '작동' : 'Yes'}</span>
+                      : tab
+                        ? <button onClick={() => setActiveTab(tab)} className="text-indigo-600 hover:underline no-print">{ko ? '단계로 →' : 'Go to step →'}</button>
+                        : <span className="text-slate-400">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        {ko ? '유형: 예방(사전 차단) / 적발(사후 발견). 방법: 수동 · 자동 · IT 의존(시스템 산출물에 의존하는 수동 통제). 재무제표 주장은 해당 통제가 뒷받침하는 항목입니다.'
+            : 'Type: preventive (blocks before) / detective (finds after). Method: manual, automated, or IT-dependent (a manual control relying on a system-generated report). The assertion column names what the control supports.'}
+      </p>
+    </div>
+  );
+};
+
+/* Shared by the ledger tab and the audit package — one computation, so the
+   printed pack can never disagree with what is on screen. */
+function buildLedger(allSteps, simParams, materials, lang) {
   const ko = lang === 'ko';
   const J = buildJournals(simParams, materials, lang);
 
@@ -3587,7 +3690,164 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
     .sort((a, b) => Math.abs(b.bal) - Math.abs(a.bal));
   const totalDr = tbRows.reduce((s, r) => s + r.dr, 0);
   const totalCr = tbRows.reduce((s, r) => s + r.cr, 0);
-  const balanced = Math.abs(totalDr - totalCr) < 0.005;
+
+  return { docs, entries, tbRows, totalDr, totalCr, balanced: Math.abs(totalDr - totalCr) < 0.005 };
+}
+
+/* =========================================================================
+   AUDIT PACKAGE — a single printable dossier: narrative, document trail,
+   trial balance, control matrix and glossary. Rendered off-screen and only
+   revealed to the printer, so the on-screen app is unaffected.
+   ========================================================================= */
+const AuditPackage = ({ allSteps, simParams, materials, lang='ko', stamp }) => {
+  const ko = lang === 'ko';
+  const { entries, tbRows, totalDr, totalCr, balanced } = buildLedger(allSteps, simParams, materials, lang);
+  const h = 'text-sm font-bold text-slate-900 mt-5 mb-1.5 border-b border-slate-300 pb-1';
+  return (
+    <div id="audit-package" className="text-slate-800">
+      {/* 1. Cover */}
+      <h1 className="text-xl font-extrabold">{ko ? '원가 프로세스 감사 참고자료' : 'Costing Process — Audit Reference Pack'}</h1>
+      <p className="text-xs text-slate-600 mt-1">
+        {COMPANY.name} · Company Code {COMPANY.code} · Plant {COMPANY.plant} ({COMPANY.plantName})
+      </p>
+      <p className="text-[11px] text-slate-500 mt-0.5">{ko ? '생성일시' : 'Generated'}: {stamp}</p>
+      <p className="mt-3 text-[11px] leading-relaxed border border-slate-300 bg-slate-50 p-2">
+        {ko ? '⚠ 본 문서는 가상 회사·가상 거래로 구성한 교육용 시뮬레이션 결과이며, 실제 회계기록이 아닙니다. 프로세스 흐름과 통제 구조를 설명하기 위한 참고자료로만 사용하십시오. SAP SE 및 Oracle과 제휴·후원·보증 관계가 없습니다.'
+            : '⚠ This document is the output of a training simulation using a fictitious company and fictitious transactions. It is not an accounting record. Use it only as a reference for explaining process flow and control structure. Not affiliated with, sponsored by, or endorsed by SAP SE or Oracle.'}
+      </p>
+
+      {/* 2. Process narrative */}
+      <h2 className={h}>{ko ? '1. 프로세스 내러티브' : '1. Process Narrative'}</h2>
+      <ol className="text-[11px] space-y-1.5">
+        {STORY_CHAPTERS.map((c, i) => (
+          <li key={i} className="avoid-break">
+            <span className="font-semibold">{i + 1}. {ko ? c.ko : c.en}</span>
+            <ul className="list-disc pl-5 text-slate-600">
+              {(ko ? c.pointsKo : c.pointsEn).map((p, j) => <li key={j}>{p}</li>)}
+            </ul>
+          </li>
+        ))}
+      </ol>
+
+      {/* 3. Document trail */}
+      <h2 className={h}>{ko ? '2. 전표 목록 (문서 추적)' : '2. Journal Entries (Document Trail)'}</h2>
+      {entries.length === 0 ? (
+        <p className="text-[11px] text-slate-500">{ko ? '실행된 거래가 없습니다.' : 'No transactions were executed.'}</p>
+      ) : (
+        <table className="w-full text-[10px] border-collapse">
+          <thead>
+            <tr className="bg-slate-200 text-left">
+              <th className="border border-slate-300 px-1.5 py-1">{ko ? '모듈' : 'Mod'}</th>
+              <th className="border border-slate-300 px-1.5 py-1">{ko ? '전표번호' : 'Doc No.'}</th>
+              <th className="border border-slate-300 px-1.5 py-1">{ko ? '선행' : 'Ref'}</th>
+              <th className="border border-slate-300 px-1.5 py-1">{ko ? '설명' : 'Description'}</th>
+              <th className="border border-slate-300 px-1.5 py-1">{ko ? '차변' : 'Debit'}</th>
+              <th className="border border-slate-300 px-1.5 py-1 text-right">{ko ? '금액' : 'Amount'}</th>
+              <th className="border border-slate-300 px-1.5 py-1">{ko ? '대변' : 'Credit'}</th>
+              <th className="border border-slate-300 px-1.5 py-1 text-right">{ko ? '금액' : 'Amount'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => (
+              <tr key={i}>
+                <td className="border border-slate-300 px-1.5 py-0.5">{e.tab}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5 font-mono">{e.docNo}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5 font-mono">{e.refNo || ''}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{e.desc}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{e.dr}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5 text-right">{e.drAmt === '' || e.drAmt == null ? '' : Number(e.drAmt).toFixed(2)}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{e.cr}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5 text-right">{e.crAmt === '' || e.crAmt == null ? '' : Number(e.crAmt).toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* 4. Trial balance */}
+      <h2 className={h}>{ko ? '3. 시산표' : '3. Trial Balance'}</h2>
+      <table className="w-full text-[10px] border-collapse">
+        <thead>
+          <tr className="bg-slate-200 text-left">
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '계정' : 'Account'}</th>
+            <th className="border border-slate-300 px-1.5 py-1 text-right">{ko ? '차변' : 'Debit'}</th>
+            <th className="border border-slate-300 px-1.5 py-1 text-right">{ko ? '대변' : 'Credit'}</th>
+            <th className="border border-slate-300 px-1.5 py-1 text-right">{ko ? '잔액' : 'Balance'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tbRows.map((r, i) => (
+            <tr key={i}>
+              <td className="border border-slate-300 px-1.5 py-0.5">{r.acct}</td>
+              <td className="border border-slate-300 px-1.5 py-0.5 text-right">{r.dr ? r.dr.toFixed(2) : ''}</td>
+              <td className="border border-slate-300 px-1.5 py-0.5 text-right">{r.cr ? r.cr.toFixed(2) : ''}</td>
+              <td className="border border-slate-300 px-1.5 py-0.5 text-right">{r.bal < 0 ? `(${Math.abs(r.bal).toFixed(2)})` : r.bal.toFixed(2)}</td>
+            </tr>
+          ))}
+          <tr className="font-bold bg-slate-100">
+            <td className="border border-slate-300 px-1.5 py-1">{ko ? '합계' : 'Total'}</td>
+            <td className="border border-slate-300 px-1.5 py-1 text-right">{totalDr.toFixed(2)}</td>
+            <td className="border border-slate-300 px-1.5 py-1 text-right">{totalCr.toFixed(2)}</td>
+            <td className="border border-slate-300 px-1.5 py-1 text-right">{balanced ? (ko ? '차변=대변' : 'Dr = Cr') : (ko ? '불일치' : 'Out of balance')}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 5. Control matrix */}
+      <h2 className={h}>{ko ? '4. 통제 매트릭스' : '4. Risk Control Matrix'}</h2>
+      <table className="w-full text-[10px] border-collapse">
+        <thead>
+          <tr className="bg-slate-200 text-left">
+            <th className="border border-slate-300 px-1.5 py-1">ID</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '통제명' : 'Control'}</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '리스크' : 'Risk'}</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '통제 기술' : 'Description'}</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '유형' : 'Type'}</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '빈도' : 'Freq.'}</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '주장' : 'Assertion'}</th>
+            <th className="border border-slate-300 px-1.5 py-1">{ko ? '작동' : 'Exercised'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CONTROLS.map(c => {
+            const x = ko ? c.ko : c.en;
+            return (
+              <tr key={c.id} className="avoid-break">
+                <td className="border border-slate-300 px-1.5 py-0.5 font-mono">{c.id}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5 font-semibold">{x.n}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{x.r}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{x.c}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{RCM_TYPE[c.type][lang]}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{RCM_FREQ[c.freq][lang]}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{x.a}</td>
+                <td className="border border-slate-300 px-1.5 py-0.5">{allSteps[c.at] ? (ko ? '작동' : 'Yes') : (ko ? '미실행' : 'Not run')}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* 6. Glossary */}
+      <h2 className={h}>{ko ? '5. 용어집' : '5. Glossary'}</h2>
+      <dl className="text-[10px] columns-2 gap-6">
+        {GLOSSARY.map(g => {
+          const [term, def] = ko ? g.ko : g.en;
+          return (
+            <div key={g.k} className="avoid-break mb-1.5 break-inside-avoid">
+              <dt className="font-semibold"><span className="font-mono">{g.k}</span> · {term}</dt>
+              <dd className="text-slate-600">{def}</dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+};
+
+const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko', onPrintAuditPack }) => {
+  const t = T[lang];
+  const ko = lang === 'ko';
+  const { entries, tbRows, totalDr, totalCr, balanced } = buildLedger(allSteps, simParams, materials, lang);
 
   const tabBg = {
     MM:'bg-blue-100 text-blue-700', PP:'bg-orange-100 text-orange-700',
@@ -3613,10 +3873,16 @@ const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
           <h2 className="text-base font-bold text-slate-800">{t.ledgerTitle}</h2>
           <p className="text-xs text-slate-500 mt-0.5">{t.ledgerCount} ({entries.length}{lang==='ko'?'건':''})</p>
         </div>
-        <button onClick={handlePrint}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800">
-          {t.printBtn}
-        </button>
+        <div className="flex items-center gap-2 no-print">
+          <button onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50">
+            {t.printBtn}
+          </button>
+          <button onClick={onPrintAuditPack}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800">
+            📋 {ko ? '감사 패키지 인쇄' : 'Print audit pack'}
+          </button>
+        </div>
       </div>
 
       {entries.length === 0 ? (
@@ -4880,6 +5146,20 @@ function App() {
   const allSteps = { ...ckSteps, ...mmSteps, ...mmReturnSteps, ...miSteps, ...sdebSteps,
     ...ppSteps, ...ficoSteps, ...mr21Steps, ...overheadSteps, ...sdSteps, ...sdReturnSteps };
 
+  // Print the audit dossier: stamp it, swap the print target, restore after.
+  const [packStamp, setPackStamp] = useState('');
+  const printAuditPack = () => {
+    setPackStamp(new Date().toLocaleString(lang === 'ko' ? 'ko-KR' : 'en-US'));
+    document.body.classList.add('print-pack');
+    const cleanup = () => {
+      document.body.classList.remove('print-pack');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    // Let React paint the stamp before handing off to the print dialog.
+    setTimeout(() => { window.print(); setTimeout(cleanup, 0); }, 60);
+  };
+
   /* ---- MM derived data ---- */
   const mmInv = useMemo(() => {
     const mm0 = simParams.mm[0] || { matCode:'RM001', qty:100, stdPrice:5.50, poPrice:5.00, vendor:'V001' };
@@ -5083,6 +5363,7 @@ function App() {
     { id:'pp',      label:tabLabels[2], icon:'🏭' },
     { id:'fico',    label:tabLabels[3], icon:'🧮' },
     { id:'overhead', label:lang==='ko'?'일반경비':'General/Overhead Expense', icon:'🧾' },
+    { id:'rcm',     label:lang==='ko'?'통제 매트릭스':'Control Matrix', icon:'🛡' },
     { id:'sd',      label:tabLabels[4], icon:'💵' },
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
@@ -5101,7 +5382,7 @@ function App() {
     { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
-    { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger'] },
+    { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm'] },
     { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
@@ -5111,7 +5392,7 @@ function App() {
     { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
-    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger'] },
+    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm'] },
     { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
@@ -5119,7 +5400,8 @@ function App() {
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
 
   return (
-    <div className={`min-h-screen ${storyMode ? 'pb-24' : ''}`}>
+    <div id="app-shell" className={`min-h-screen ${storyMode ? 'pb-24' : ''}`}>
+      <AuditPackage allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} stamp={packStamp} />
       {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
       {storyMode && <StoryBar idx={storyIdx} setIdx={setStoryIdx} setActiveTab={setActiveTab} lang={lang}
         onExit={() => setStoryMode(false)} />}
@@ -5263,7 +5545,8 @@ function App() {
         {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} simParams={simParams} materials={materials} />}
         {activeTab==='overhead' && <OverheadTab overheadSteps={overheadSteps} setOverheadSteps={setOverheadSteps} openPopup={openPopup} lang={lang} simParams={simParams} materials={materials} />}
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
-        {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} />}
+        {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} onPrintAuditPack={printAuditPack} />}
+        {activeTab==='rcm' && <RcmTab allSteps={allSteps} setActiveTab={setActiveTab} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}
         {activeTab==='script' && <ScriptTab lang={lang} />}

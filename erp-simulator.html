@@ -76,6 +76,30 @@
   body:not(.dark) #dark-toggle {
     background: rgba(255,255,255,0.9); border-color: #e2e8f0; color: #64748b;
   }
+
+  /* ── Print (audit hand-out) ──
+     Strip interactive chrome, force light ink-friendly colours, and stamp
+     every page so a printed copy can never be mistaken for a real record. */
+  @media print {
+    @page { margin: 14mm 12mm 18mm; }
+    body, body.dark { background: #fff !important; color: #000 !important; }
+    #dark-toggle, aside, nav, header .no-print,
+    .story-bar, .no-print { display: none !important; }
+    body.dark .bg-white, body.dark .bg-slate-50 { background: #fff !important; }
+    body.dark .text-slate-600, body.dark .text-slate-700,
+    body.dark .text-slate-800 { color: #000 !important; }
+    .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-2xl { box-shadow: none !important; }
+    main { padding: 0 !important; }
+    table { page-break-inside: auto; }
+    tr, .avoid-break { page-break-inside: avoid; }
+    thead { display: table-header-group; }
+    /* Disclaimer stamped on every printed page */
+    body::after {
+      content: "교육용 가상 시나리오 — 실제 회계기록이 아닙니다 · Illustrative training scenario — not an accounting record";
+      position: fixed; bottom: 4mm; left: 0; right: 0;
+      text-align: center; font-size: 8pt; color: #64748b;
+    }
+  }
 </style>
 </head>
 <body>
@@ -3221,49 +3245,116 @@ const SDTab = ({ sdSteps, setSdSteps, openPopup, sdInv, arBalance, revenue, fico
 /* =========================================================================
    TAB 6: LEDGER (ALL JOURNAL ENTRIES)
    ========================================================================= */
-const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, lang='ko' }) => {
+/* Document trail: every posting step in business sequence, mapped to the
+   journal that produces it. Single source of truth — the ledger reads the
+   same buildJournals() output the tab screens do, so amounts can never
+   drift from the parameters entered in the Variables tab. */
+const LEDGER_DOCS = [
+  { s:'kp26',       j:'kp26',       mod:'CO'  },
+  { s:'ck11n_h',    j:'ck11n_h',    mod:'CO'  },
+  { s:'ck24_h',     j:'ck24_h',     mod:'CO'  },
+  { s:'ck11n_f',    j:'ck11n_f',    mod:'CO'  },
+  { s:'ck24_f',     j:'ck24_f',     mod:'CO'  },
+  { s:'me21n',      j:'me21n',      mod:'MM'  },
+  { s:'migo_gr',    j:'migo_gr',    mod:'MM'  },
+  { s:'miro',       j:'miro',       mod:'MM'  },
+  { s:'f53',        j:'f53',        mod:'MM'  },
+  { s:'ret_po',     j:'me21n_ret',  mod:'MM'  },
+  { s:'ret_migo',   j:'migo_ret',   mod:'MM'  },
+  { s:'mi01',       j:'mi01',       mod:'MM'  },
+  { s:'mi04',       j:'mi04',       mod:'MM'  },
+  { s:'mi07',       j:'mi07',       mod:'MM'  },
+  { s:'miro_sd',    j:'miro_sd',    mod:'MM'  },
+  { s:'miro_sd2',   j:'miro_sd2',   mod:'MM'  },
+  { s:'f53_sd',     j:'f53_sd',     mod:'MM'  },
+  { s:'co01_h',     j:'co01_h',     mod:'PP'  },
+  { s:'gi_h',       j:'gi_h',       mod:'PP'  },
+  { s:'co11n_h',    j:'co11n_h',    mod:'PP'  },
+  { s:'gr_h',       j:'gr_h',       mod:'PP'  },
+  { s:'co01_f',     j:'co01_f',     mod:'PP'  },
+  { s:'gi_f',       j:'gi_f',       mod:'PP'  },
+  { s:'co11n_f',    j:'co11n_f',    mod:'PP'  },
+  { s:'gr_f',       j:'gr_f',       mod:'PP'  },
+  { s:'ko88_h',     j:'ko88_h',     mod:'CO'  },
+  { s:'ko88_f',     j:'ko88_f',     mod:'CO'  },
+  { s:'kss2',       j:'kss2',       mod:'CO'  },
+  { s:'sl_roh',     j:'sl_roh',     mod:'CO'  },
+  { s:'sl_halb',    j:'sl_halb',    mod:'CO'  },
+  { s:'ml',         j:'ml',         mod:'CO'  },
+  { s:'pc',         j:'ml_pc',      mod:'CO'  },
+  { s:'ke27',       j:'ke27',       mod:'CO'  },
+  { s:'mr21',       j:'mr21',       mod:'CO'  },
+  { s:'fb50',       j:'fb50',       mod:'SGA' },
+  { s:'ksb1',       j:'ksb1',       mod:'SGA' },
+  { s:'ksu5',       j:'ksu5',       mod:'SGA' },
+  { s:'ke30',       j:'ke30',       mod:'SGA' },
+  { s:'va01',       j:'va01',       mod:'SD'  },
+  { s:'vl01n',      j:'vl01n',      mod:'SD'  },
+  { s:'vf01',       j:'vf01',       mod:'SD'  },
+  { s:'f28',        j:'f28',        mod:'SD'  },
+  { s:'ret_so',     j:'va01_ret',   mod:'SD'  },
+  { s:'ret_del',    j:'vl01n_ret',  mod:'SD'  },
+  { s:'ret_credit', j:'vf01_ret',   mod:'SD'  },
+];
+// Group Dr/Cr postings by account for the trial balance. Account strings carry
+// a descriptive suffix ("원재료 RM001 (재고)") — strip it so the same GL
+// account aggregates into one line.
+const acctKey = (a) => String(a).replace(/\s*[(（].*$/, '').trim();
+
+const LedgerTab = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
   const t = T[lang];
+  const ko = lang === 'ko';
+  const J = buildJournals(simParams, materials, lang);
 
-  // FICO post-closing step key in App state is `pc`; spec references `ml_pc`.
-  const ficoLedger = { ...ficoSteps, ml_pc: ficoSteps.pc };
+  // Executed documents, in posting sequence, sourced from buildJournals.
+  const docs = LEDGER_DOCS
+    .filter(d => allSteps[d.s] && J[d.j])
+    .map(d => ({ ...d, jr: J[d.j][lang] }));
 
-  // 분개 항목 생성 (실행된 steps 기반)
+  // Flatten to table rows: one row per Dr/Cr line pair inside each document.
   const entries = [];
+  docs.forEach(d => {
+    const drs = (d.jr.lines || []).filter(l => l.type === 'Dr');
+    const crs = (d.jr.lines || []).filter(l => l.type === 'Cr');
+    const rows = Math.max(drs.length, crs.length);
+    if (rows === 0) {
+      entries.push({ tab:d.mod, desc:d.jr.title, dr:'—', cr:'—', drAmt:'', crAmt:'', memo:ko?'분개 없음':'No posting' });
+      return;
+    }
+    for (let i = 0; i < rows; i++) {
+      entries.push({
+        tab: d.mod,
+        desc: i === 0 ? d.jr.title : '',
+        dr: drs[i] ? drs[i].account : '',
+        drAmt: drs[i] ? drs[i].amount : '',
+        cr: crs[i] ? crs[i].account : '',
+        crAmt: crs[i] ? crs[i].amount : '',
+      });
+    }
+  });
 
-  // MM 분개
-  if (mmSteps.me21n)   entries.push({ tab:'MM', tcode:'ME21N', desc:'구매오더 생성', dr:'—', cr:'—', amt:'—', note:'Commitment 기록' });
-  if (mmSteps.migo_gr) entries.push(
-    { tab:'MM', tcode:'MIGO', desc:'원재료 입고(101)', dr:'원재료 RM001', cr:'GR/IR', amt:500, drAmt:550, crAmt:500 },
-    { tab:'MM', tcode:'MIGO', desc:'구매가격차이', dr:'', cr:'구매가격차이(PPV)', amt:50, drAmt:'', crAmt:50 }
-  );
-  if (mmSteps.miro)    entries.push({ tab:'MM', tcode:'MIRO', desc:'송장검증', dr:'GR/IR', cr:'AP-V001', amt:500, drAmt:500, crAmt:500 });
-  if (mmSteps.f53)     entries.push({ tab:'MM', tcode:'F-53', desc:'대금지급', dr:'AP-V001', cr:'현금', amt:500, drAmt:500, crAmt:500 });
+  // Trial balance — proves Dr total = Cr total across everything posted.
+  const tb = {};
+  docs.forEach(d => (d.jr.lines || []).forEach(l => {
+    if (!l.type || l.amount == null) return;
+    const k = acctKey(l.account);
+    if (!tb[k]) tb[k] = { dr:0, cr:0 };
+    tb[k][l.type === 'Dr' ? 'dr' : 'cr'] += Number(l.amount) || 0;
+  }));
+  const tbRows = Object.entries(tb)
+    .map(([acct, v]) => ({ acct, dr:v.dr, cr:v.cr, bal:v.dr - v.cr }))
+    .sort((a, b) => Math.abs(b.bal) - Math.abs(a.bal));
+  const totalDr = tbRows.reduce((s, r) => s + r.dr, 0);
+  const totalCr = tbRows.reduce((s, r) => s + r.cr, 0);
+  const balanced = Math.abs(totalDr - totalCr) < 0.005;
 
-  // PP 분개
-  if (ppSteps.gi_h)    entries.push({ tab:'PP', tcode:'MIGO', desc:'원재료 출고(261) SF', dr:'WIP', cr:'원재료', amt:394, drAmt:394, crAmt:394 });
-  if (ppSteps.co11n_h) entries.push({ tab:'PP', tcode:'CO11N', desc:'반제품 생산확정', dr:'WIP', cr:'Activity', amt:433.50, drAmt:433.50, crAmt:433.50 });
-  if (ppSteps.gr_h)    entries.push({ tab:'PP', tcode:'MIGO', desc:'반제품 입고(101)', dr:'SF001', cr:'생산완성대체', amt:360, drAmt:360, crAmt:360 });
-  if (ppSteps.gi_f)    entries.push({ tab:'PP', tcode:'MIGO', desc:'출고(261) FG', dr:'WIP', cr:'SF001/RM001', amt:207.50, drAmt:207.50, crAmt:207.50 });
-  if (ppSteps.co11n_f) entries.push({ tab:'PP', tcode:'CO11N', desc:'완성품 생산확정', dr:'WIP', cr:'Activity', amt:212.50, drAmt:212.50, crAmt:212.50 });
-  if (ppSteps.gr_f)    entries.push({ tab:'PP', tcode:'MIGO', desc:'완성품 입고(101)', dr:'FG001', cr:'생산완성대체', amt:450, drAmt:450, crAmt:450 });
-  if (ppSteps.ko88_h)  entries.push({ tab:'PP', tcode:'KO88', desc:'SF001 오더정산', dr:'생산정산차이', cr:'생산완성대체', amt:467.50, drAmt:467.50, crAmt:467.50 });
-  if (ppSteps.ko88_f)  entries.push({ tab:'PP', tcode:'KO88', desc:'FG001 오더정산', dr:'생산완성대체', cr:'생산정산차이', amt:30, drAmt:30, crAmt:30 });
+  const tabBg = {
+    MM:'bg-blue-100 text-blue-700', PP:'bg-orange-100 text-orange-700',
+    CO:'bg-indigo-100 text-indigo-700', SD:'bg-teal-100 text-teal-700',
+    SGA:'bg-fuchsia-100 text-fuchsia-700',
+  };
 
-  // FI/CO 분개
-  if (ficoLedger.ml_pc) entries.push(
-    { tab:'FI/CO', tcode:'CKMLCP', desc:'ML결산전기 재고분', dr:'FG001', cr:'ML차이계정', amt:101.875, drAmt:101.875, crAmt:101.875 },
-    { tab:'FI/CO', tcode:'CKMLCP', desc:'ML결산전기 소비분', dr:'매출원가', cr:'ML차이계정', amt:101.875, drAmt:101.875, crAmt:101.875 }
-  );
-
-  // SD 분개
-  if (sdSteps.vl01n) entries.push({ tab:'SD', tcode:'VL01N', desc:'출하(GI)', dr:'매출원가(표준)', cr:'완제품', amt:225, drAmt:225, crAmt:225 });
-  if (sdSteps.vf01)  entries.push({ tab:'SD', tcode:'VF01', desc:'청구(Invoice)', dr:'매출채권(AR)', cr:'매출액', amt:750, drAmt:750, crAmt:750 });
-  if (sdSteps.f28)   entries.push({ tab:'SD', tcode:'F-28', desc:'수취(Payment)', dr:'현금', cr:'매출채권(AR)', amt:750, drAmt:750, crAmt:750 });
-
-  const tabColor = { MM:'blue', PP:'orange', 'FI/CO':'indigo', SD:'teal' };
-  const tabBg    = { MM:'bg-blue-100 text-blue-700', PP:'bg-orange-100 text-orange-700', 'FI/CO':'bg-indigo-100 text-indigo-700', SD:'bg-teal-100 text-teal-700' };
-
-  const fmt = (v) => v === '—' || v === '' ? '—' : `$${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}`;
+  const fmt = (v) => v === '—' || v === '' || v == null ? '—' : `$${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}`;
 
   const handlePrint = () => window.print();
 
@@ -3312,7 +3403,10 @@ const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, l
                     <td className="px-3 py-1.5">
                       <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${tabBg[e.tab]||'bg-gray-100 text-gray-600'}`}>{e.tab}</span>
                     </td>
-                    <td className="px-3 py-1.5 text-slate-700">{e.desc}</td>
+                    <td className="px-3 py-1.5 text-slate-700">
+                      {e.desc}
+                      {e.memo && <span className="ml-1.5 text-[10px] text-slate-400 italic">({e.memo})</span>}
+                    </td>
                     <td className="px-3 py-1.5 text-red-700 font-medium">{e.dr}</td>
                     <td className="px-3 py-1.5 text-right text-red-600">{fmt(e.drAmt ?? e.amt)}</td>
                     <td className="px-3 py-1.5 text-blue-700 font-medium">{e.cr}</td>
@@ -3323,41 +3417,63 @@ const LedgerTab = ({ mmSteps, ppSteps, ficoSteps, sdSteps, ckSteps, materials, l
             </table>
           </div>
 
-          {/* 계정별 잔액 요약 */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* 시산표 (Trial Balance) — 전기된 모든 분개에서 집계 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-3">
-              <h3 className="text-xs font-semibold text-slate-700 mb-2">{t.balTitle}</h3>
-              {[
-                { acct:'원재료 (RM001)', bal: (mmSteps.migo_gr?550:0) - (ppSteps.gi_h?330:0) - (ppSteps.gi_f?27.50:0) },
-                { acct:'반제품 (SF001)', bal: (ppSteps.gr_h?360:0) - (ppSteps.gi_f?180:0) + (ppSteps.ko88_h?0:0) },
-                { acct:'완제품 (FG001)', bal: (ppSteps.gr_f?450:0) - (sdSteps.vl01n?225:0) + (ficoLedger.ml_pc?101.875:0) },
-                { acct:'매출채권 (AR)',    bal: (sdSteps.vf01?750:0) - (sdSteps.f28?750:0) },
-                { acct:'매입채무 (AP)',    bal: (mmSteps.miro?500:0) - (mmSteps.f53?500:0) },
-                { acct:'매출액',          bal: sdSteps.vf01?750:0 },
-                { acct:'매출원가',        bal: (sdSteps.vl01n?225:0) + (ficoLedger.ml_pc?101.875:0) },
-              ].map((r,i) => (
-                <div key={i} className="flex justify-between py-0.5 text-xs border-b border-slate-50 last:border-0">
-                  <span className="text-slate-600">{r.acct}</span>
-                  <span className={`font-semibold ${r.bal<0?'text-red-600':r.bal>0?'text-slate-800':'text-slate-400'}`}>
-                    ${Math.abs(r.bal).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}
-                  </span>
-                </div>
-              ))}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-slate-700">{ko ? '시산표 (계정별 집계)' : 'Trial Balance (by account)'}</h3>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${balanced ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {balanced ? (ko ? '✅ 차변=대변' : '✅ Dr = Cr') : (ko ? '⚠ 불일치' : '⚠ Out of balance')}
+                </span>
+              </div>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-100">
+                    <th className="text-left font-medium py-1">{ko ? '계정' : 'Account'}</th>
+                    <th className="text-right font-medium py-1">{ko ? '차변' : 'Dr'}</th>
+                    <th className="text-right font-medium py-1">{ko ? '대변' : 'Cr'}</th>
+                    <th className="text-right font-medium py-1">{ko ? '잔액' : 'Balance'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tbRows.map((r, i) => (
+                    <tr key={i} className="border-b border-slate-50 last:border-0">
+                      <td className="py-0.5 text-slate-600">{r.acct}</td>
+                      <td className="py-0.5 text-right text-red-600">{r.dr ? r.dr.toFixed(2) : '—'}</td>
+                      <td className="py-0.5 text-right text-blue-600">{r.cr ? r.cr.toFixed(2) : '—'}</td>
+                      <td className={`py-0.5 text-right font-semibold ${r.bal < 0 ? 'text-blue-700' : 'text-slate-800'}`}>
+                        {r.bal < 0 ? `(${Math.abs(r.bal).toFixed(2)})` : r.bal.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-slate-300 font-bold text-slate-800">
+                    <td className="py-1">{ko ? '합계' : 'Total'}</td>
+                    <td className="py-1 text-right text-red-700">{totalDr.toFixed(2)}</td>
+                    <td className="py-1 text-right text-blue-700">{totalCr.toFixed(2)}</td>
+                    <td className="py-1 text-right">—</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-[10px] text-slate-400 mt-1.5">
+                {ko ? '잔액 괄호는 대변 잔액입니다.' : 'Parentheses indicate a credit balance.'}
+              </p>
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 p-3">
               <h3 className="text-xs font-semibold text-slate-700 mb-2">{t.plTitle}</h3>
               {(() => {
-                const rev  = sdSteps.vf01  ? 750    : 0;
-                const cogs = (sdSteps.vl01n ? 225    : 0) + (ficoLedger.ml_pc ? 101.875 : 0);
-                const gp   = rev - cogs;
-                const margin = rev > 0 ? (gp/rev*100).toFixed(1) : '—';
+                const sd0  = simParams.sd[0] || { matCode:'FG001', qty:5, salesPrice:150 };
+                const rev  = allSteps.vf01 ? +(sd0.qty * sd0.salesPrice).toFixed(2) : 0;
+                const stdU = parseFloat((materials.find(m => m.MaterialCode === sd0.matCode) || { StandardPrice:'45.00' }).StandardPrice);
+                const cogs = allSteps.vl01n ? (allSteps.pc && copa ? copa.actualCOGS : +(sd0.qty * stdU).toFixed(2)) : 0;
+                const gp   = +(rev - cogs).toFixed(3);
+                const margin = rev > 0 ? (gp / rev * 100).toFixed(1) : '—';
                 return (
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between"><span className="text-slate-600">{t.plRevenue}</span><span className="font-semibold">${rev.toFixed(2)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-600">{t.plCOGS}</span><span className="font-semibold text-red-600">-${cogs.toFixed(3)}</span></div>
                     <div className="flex justify-between border-t pt-1.5"><span className="font-bold text-slate-700">{t.plGP}</span><span className={`font-bold ${gp>0?'text-green-600':'text-red-600'}`}>${gp.toFixed(3)} ({margin}%)</span></div>
-                    {ficoLedger.ml_pc && <p className="text-slate-400 italic mt-1">{lang==='ko'?'ML 결산 후 실제원가 반영':'Actual cost reflected after ML settlement'}</p>}
+                    {allSteps.pc && <p className="text-slate-400 italic mt-1">{ko?'ML 결산 후 실제원가 반영':'Actual cost reflected after ML settlement'}</p>}
                   </div>
                 );
               })()}
@@ -4515,6 +4631,10 @@ function App() {
   const [mr21Steps, setMr21Steps] = useState({ mr21:false });
   const [sdReturnSteps, setSdReturnSteps] = useState({ ret_so:false, ret_del:false, ret_credit:false });
 
+  // Every executed step in one lookup, for the journal ledger's document trail.
+  const allSteps = { ...ckSteps, ...mmSteps, ...mmReturnSteps, ...miSteps, ...sdebSteps,
+    ...ppSteps, ...ficoSteps, ...mr21Steps, ...overheadSteps, ...sdSteps, ...sdReturnSteps };
+
   /* ---- MM derived data ---- */
   const mmInv = useMemo(() => {
     const mm0 = simParams.mm[0] || { matCode:'RM001', qty:100, stdPrice:5.50, poPrice:5.00, vendor:'V001' };
@@ -4912,7 +5032,7 @@ function App() {
         {activeTab==='fico' && <FICOTab ficoSteps={ficoSteps} setFicoSteps={setFicoSteps} openPopup={openPopup} copa={copa} lang={lang} mr21Steps={mr21Steps} setMr21Steps={setMr21Steps} simParams={simParams} materials={materials} />}
         {activeTab==='overhead' && <OverheadTab overheadSteps={overheadSteps} setOverheadSteps={setOverheadSteps} openPopup={openPopup} lang={lang} simParams={simParams} materials={materials} />}
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
-        {activeTab==='ledger' && <LedgerTab mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} ckSteps={ckSteps} materials={materials} lang={lang} />}
+        {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}
         {activeTab==='script' && <ScriptTab lang={lang} />}

@@ -1,35 +1,18 @@
 import { useMemo, useState } from 'react'
 import {
+  baselineAssumptions,
+  planningDataProfile,
+  startingBalances,
+} from '../../domain/planning/planning-data'
+import {
   compareScenarios,
   projectScenario,
   type ScenarioAssumptions,
 } from '../../domain/planning/project-scenario'
 
-const startingBalances = {
-  cash: 1_850_000,
-  accountsReceivable: 1_000_000,
-  inventory: 1_400_000,
-  fixedAssets: 5_750_000,
-  accountsPayable: 1_100_000,
-  debt: 2_900_000,
-  equity: 6_000_000,
-}
-
-const baselineAssumptions: ScenarioAssumptions = {
-  monthlyVolume: 12_500,
-  unitPrice: 240,
-  monthlyGrowthRate: 0.01,
-  cogsPercent: 0.58,
-  payroll: 420_000,
-  operatingExpense: 310_000,
-  capex: 120_000,
-  dsoDays: 30,
-  dpoDays: 35,
-}
-
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
-  currency: 'USD',
+  currency: planningDataProfile.currency,
   notation: 'compact',
   maximumFractionDigits: 1,
 })
@@ -65,6 +48,56 @@ function Metric({ label, value, impact }: { label: string; value: string; impact
   )
 }
 
+function ModelGuide() {
+  return (
+    <aside className="model-guide" aria-labelledby="model-guide-title">
+      <div className="guide-heading">
+        <div>
+          <p className="eyebrow">Planning model guide</p>
+          <h3 id="model-guide-title">데이터 출처 및 활용 방법</h3>
+        </div>
+        <span className="demo-badge">{planningDataProfile.sourceLabel}</span>
+      </div>
+
+      <section aria-labelledby="data-source-title">
+        <h4 id="data-source-title">1. 데이터 출처</h4>
+        <p>{planningDataProfile.sourceDetail}</p>
+        <dl className="model-meta">
+          <div><dt>Dataset</dt><dd>{planningDataProfile.datasetId}</dd></div>
+          <div><dt>기준일</dt><dd>{planningDataProfile.asOfDate}</dd></div>
+          <div><dt>전망기간</dt><dd>{planningDataProfile.projectionStart}부터 {planningDataProfile.projectionMonths}개월</dd></div>
+          <div><dt>통화</dt><dd>{planningDataProfile.currency}</dd></div>
+        </dl>
+      </section>
+
+      <section aria-labelledby="usage-title">
+        <h4 id="usage-title">2. 활용 순서</h4>
+        <ol>
+          <li><b>Baseline</b>에서 현재 계획을 확인합니다.</li>
+          <li>한 번에 한 개 driver를 조정해 원인을 분리합니다.</li>
+          <li>KPI의 <b>vs baseline</b> 차이와 3개 재무제표를 함께 확인합니다.</li>
+          <li>가정과 결과를 검토한 뒤 Reset으로 기준안을 복원합니다.</li>
+        </ol>
+      </section>
+
+      <details>
+        <summary>산식·고정 가정·모델 한계 보기</summary>
+        <h4>고정 Baseline 가정</h4>
+        <dl className="assumption-list">
+          <div><dt>Monthly growth</dt><dd>{baselineAssumptions.monthlyGrowthRate * 100}%</dd></div>
+          <div><dt>Payroll</dt><dd>{currency.format(baselineAssumptions.payroll)}</dd></div>
+          <div><dt>Operating expense</dt><dd>{currency.format(baselineAssumptions.operatingExpense)}</dd></div>
+          <div><dt>DPO</dt><dd>{baselineAssumptions.dpoDays} days</dd></div>
+        </dl>
+        <h4>핵심 산식</h4>
+        <ul>{planningDataProfile.formulas.map(formula => <li key={formula}>{formula}</li>)}</ul>
+        <h4>모델 한계</h4>
+        <ul>{planningDataProfile.limitations.map(limit => <li key={limit}>{limit}</li>)}</ul>
+      </details>
+    </aside>
+  )
+}
+
 export function PlanningLab() {
   const [assumptions, setAssumptions] = useState<ScenarioAssumptions>({
     ...baselineAssumptions,
@@ -76,20 +109,24 @@ export function PlanningLab() {
   const baseline = useMemo(() => projectScenario({
     startingBalances,
     assumptions: baselineAssumptions,
-    months: 12,
-    startMonth: '2026-08',
-    engineVersion: '1.0.0',
+    months: planningDataProfile.projectionMonths,
+    startMonth: planningDataProfile.projectionStart,
+    engineVersion: planningDataProfile.engineVersion,
   }), [])
   const scenario = useMemo(() => projectScenario({
     startingBalances,
     assumptions,
-    months: 12,
-    startMonth: '2026-08',
-    engineVersion: '1.0.0',
+    months: planningDataProfile.projectionMonths,
+    startMonth: planningDataProfile.projectionStart,
+    engineVersion: planningDataProfile.engineVersion,
   }), [assumptions])
   const bridge = compareScenarios(baseline, scenario)
   const finalMonth = scenario.months.at(-1)!
-  const maxRevenue = Math.max(...baseline.months.map(month => month.profitAndLoss.revenue))
+  const maxRevenue = Math.max(
+    ...baseline.months.map(month => month.profitAndLoss.revenue),
+    ...scenario.months.map(month => month.profitAndLoss.revenue),
+  )
+  const reconciled = scenario.checks.every(item => item.balanceSheetBalanced && item.cashFlowReconciled)
 
   function updateDriver(key: DriverKey, value: number) {
     setAssumptions(current => ({ ...current, [key]: value }))
@@ -97,91 +134,120 @@ export function PlanningLab() {
 
   return (
     <div className="app-shell">
-      <aside>
+      <aside className="control-rail">
         <a className="brand" href="/">ERP Learning Lab</a>
         <p className="eyebrow">Planning mode</p>
-        <h1>FP&A Scenario Studio</h1>
+        <h1>FP&amp;A Scenario Studio</h1>
         <p className="intro">Change operating drivers and trace the impact through P&amp;L, balance sheet and cash flow.</p>
 
         <div className="driver-list">
-          {drivers.map(driver => (
-            <label key={driver.key}>
-              <span><b>{driver.label}</b><output>{driver.format(assumptions[driver.key])}</output></span>
-              <input
-                type="range"
-                min={driver.min}
-                max={driver.max}
-                step={driver.step}
-                value={assumptions[driver.key]}
-                onChange={event => updateDriver(driver.key, Number(event.target.value))}
-              />
-            </label>
-          ))}
+          {drivers.map(driver => {
+            const inputId = `driver-${driver.key}`
+            return (
+              <label key={driver.key} htmlFor={inputId}>
+                <span>
+                  <b>{driver.label}</b>
+                  <output htmlFor={inputId}>{driver.format(assumptions[driver.key])}</output>
+                </span>
+                <input
+                  id={inputId}
+                  type="range"
+                  min={driver.min}
+                  max={driver.max}
+                  step={driver.step}
+                  value={assumptions[driver.key]}
+                  onChange={event => updateDriver(driver.key, Number(event.target.value))}
+                />
+              </label>
+            )
+          })}
         </div>
         <button onClick={() => setAssumptions({ ...baselineAssumptions })}>Reset to baseline</button>
-        <p className="disclaimer">Illustrative educational simulation. Not financial advice. Engine v{scenario.engineVersion}.</p>
+        <p className="disclaimer">Illustrative educational simulation · {planningDataProfile.currency} · Engine v{scenario.engineVersion}</p>
       </aside>
 
       <main>
-        <header>
-          <div>
-            <p className="eyebrow">Scenario / Revenue slowdown &amp; inventory pressure</p>
-            <h2>12-month operating outlook</h2>
-          </div>
-          <div className="check">{scenario.checks.every(item => item.balanceSheetBalanced && item.cashFlowReconciled) ? '✓ Statements reconciled' : '⚠ Review required'}</div>
-        </header>
+        <div className="content-frame">
+          <header>
+            <div>
+              <p className="eyebrow">Scenario / Revenue slowdown &amp; working-capital pressure</p>
+              <h2>12-month operating outlook</h2>
+              <p className="period-note">Illustrative data · As of {planningDataProfile.asOfDate} · {planningDataProfile.currency}</p>
+            </div>
+            <div className={`check ${reconciled ? '' : 'review'}`}>
+              {reconciled ? 'Statements reconciled' : 'Review required'}
+            </div>
+          </header>
 
-        <section className="metrics">
-          <Metric label="Month 12 revenue" value={currency.format(finalMonth.profitAndLoss.revenue)} impact={bridge.revenueImpact} />
-          <Metric label="Month 12 net income" value={currency.format(finalMonth.profitAndLoss.netIncome)} impact={bridge.netIncomeImpact} />
-          <Metric label="Ending cash" value={currency.format(finalMonth.cashFlow.endingCash)} impact={bridge.endingCashImpact} />
-          <Metric label="Accounts receivable" value={currency.format(finalMonth.balanceSheet.accountsReceivable)} impact={bridge.accountsReceivableImpact} />
-        </section>
+          <section className="metrics" aria-label="Scenario summary metrics">
+            <Metric label="Month 12 revenue" value={currency.format(finalMonth.profitAndLoss.revenue)} impact={bridge.revenueImpact} />
+            <Metric label="Month 12 net income" value={currency.format(finalMonth.profitAndLoss.netIncome)} impact={bridge.netIncomeImpact} />
+            <Metric label="Ending cash" value={currency.format(finalMonth.cashFlow.endingCash)} impact={bridge.endingCashImpact} />
+            <Metric label="Accounts receivable" value={currency.format(finalMonth.balanceSheet.accountsReceivable)} impact={bridge.accountsReceivableImpact} />
+          </section>
 
-        <section className="panel chart-panel">
-          <div className="panel-heading">
-            <div><h3>Revenue trajectory</h3><p>Baseline compared with the active downside scenario</p></div>
-            <div className="legend"><span className="base-dot" />Baseline <span className="scenario-dot" />Scenario</div>
-          </div>
-          <div className="chart">
-            {scenario.months.map((month, index) => (
-              <div className="bar-group" key={month.month}>
-                <div className="bars">
-                  <i className="base-bar" style={{ height: `${baseline.months[index].profitAndLoss.revenue / maxRevenue * 100}%` }} />
-                  <i className="scenario-bar" style={{ height: `${month.profitAndLoss.revenue / maxRevenue * 100}%` }} />
+          <div className="analysis-grid">
+            <section className="panel chart-panel" aria-labelledby="revenue-chart-title">
+              <div className="panel-heading">
+                <div>
+                  <h3 id="revenue-chart-title">Revenue trajectory</h3>
+                  <p>Baseline compared with the active downside scenario</p>
                 </div>
-                <span>{month.month.slice(5)}</span>
+                <div className="legend" aria-label="Chart legend">
+                  <span className="base-dot" />Baseline
+                  <span className="scenario-dot" />Scenario
+                </div>
               </div>
-            ))}
-          </div>
-        </section>
+              <figure>
+                <div
+                  className="chart"
+                  role="img"
+                  aria-label={`Monthly revenue comparison. Month 12 baseline ${currency.format(baseline.months.at(-1)!.profitAndLoss.revenue)} and scenario ${currency.format(finalMonth.profitAndLoss.revenue)}.`}
+                >
+                  {scenario.months.map((month, index) => (
+                    <div className="bar-group" key={month.month}>
+                      <div className="bars">
+                        <i className="base-bar" style={{ height: `${baseline.months[index].profitAndLoss.revenue / maxRevenue * 100}%` }} />
+                        <i className="scenario-bar" style={{ height: `${month.profitAndLoss.revenue / maxRevenue * 100}%` }} />
+                      </div>
+                      <span>{month.month.slice(5)}</span>
+                    </div>
+                  ))}
+                </div>
+                <figcaption>Months run from {planningDataProfile.projectionStart} for {planningDataProfile.projectionMonths} months.</figcaption>
+              </figure>
+            </section>
 
-        <section className="statement-grid">
-          {[
-            ['Profit & Loss', [
-              ['Revenue', finalMonth.profitAndLoss.revenue],
-              ['Gross profit', finalMonth.profitAndLoss.grossProfit],
-              ['Net income', finalMonth.profitAndLoss.netIncome],
-            ]],
-            ['Balance Sheet', [
-              ['Cash', finalMonth.balanceSheet.cash],
-              ['Accounts receivable', finalMonth.balanceSheet.accountsReceivable],
-              ['Equity', finalMonth.balanceSheet.equity],
-            ]],
-            ['Cash Flow', [
-              ['Net income', finalMonth.cashFlow.netIncome],
-              ['Working capital', -finalMonth.cashFlow.changeInAccountsReceivable + finalMonth.cashFlow.changeInAccountsPayable],
-              ['Net cash movement', finalMonth.cashFlow.netCashMovement],
-            ]],
-          ].map(([title, rows]) => (
-            <article className="panel statement" key={String(title)}>
-              <h3>{String(title)}</h3>
-              {(rows as Array<[string, number]>).map(([label, amount]) => (
-                <div key={label}><span>{label}</span><b>{currency.format(amount)}</b></div>
-              ))}
-            </article>
-          ))}
-        </section>
+            <ModelGuide />
+          </div>
+
+          <section className="statement-grid" aria-label="Month 12 financial statements">
+            {[
+              ['Profit & Loss', [
+                ['Revenue', finalMonth.profitAndLoss.revenue],
+                ['Gross profit', finalMonth.profitAndLoss.grossProfit],
+                ['Net income', finalMonth.profitAndLoss.netIncome],
+              ]],
+              ['Balance Sheet', [
+                ['Cash', finalMonth.balanceSheet.cash],
+                ['Accounts receivable', finalMonth.balanceSheet.accountsReceivable],
+                ['Equity', finalMonth.balanceSheet.equity],
+              ]],
+              ['Cash Flow', [
+                ['Net income', finalMonth.cashFlow.netIncome],
+                ['Working capital', -finalMonth.cashFlow.changeInAccountsReceivable + finalMonth.cashFlow.changeInAccountsPayable],
+                ['Net cash movement', finalMonth.cashFlow.netCashMovement],
+              ]],
+            ].map(([title, rows]) => (
+              <article className="panel statement" key={String(title)}>
+                <h3>{String(title)}</h3>
+                {(rows as Array<[string, number]>).map(([label, amount]) => (
+                  <div key={label}><span>{label}</span><b>{currency.format(amount)}</b></div>
+                ))}
+              </article>
+            ))}
+          </section>
+        </div>
       </main>
     </div>
   )

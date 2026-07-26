@@ -3,6 +3,7 @@
   "outputDirectory": "public",
   "rewrites": [
     { "source": "/", "destination": "/erp-simulator.html" },
+    { "source": "/planning", "destination": "/planning-lab.html" },
     { "source": "/accessible-patterns", "destination": "/accessible-patterns.html" }
   ]
 }

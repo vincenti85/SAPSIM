@@ -1991,6 +1991,107 @@ const STORY_CHAPTERS = [
     pointsKo:['오늘 실행한 모든 전표를 시간순으로 재확인','차변=대변, 모듈 간 연결을 확인하며 마무리'],
     pointsEn:['Replay every document posted today in order','Close by confirming Dr=Cr and cross-module links'] },
 ];
+/* Instructor notes, keyed by chapter tab. Kept separate from STORY_CHAPTERS
+   so the learner-facing slide data stays readable, and so the notes can be
+   hidden entirely when projecting to an audience.
+   ask = questions to put to the room · watch = the misconception to catch
+   · answer = the point the chapter must land. */
+const INSTRUCTOR_NOTES = {
+  flow: {
+    ko: { ask:['이 회사는 무엇으로 돈을 법니까? 사서·만들어·파는 것 중 어디서 이익이 생길까요?'],
+          watch:['"ERP가 회계를 만든다"는 오해 — ERP는 이미 일어난 사건을 기록할 뿐입니다.'],
+          answer:['오늘 30분은 하나의 사이클입니다. 각 화면은 별개 기능이 아니라 같은 거래의 다른 국면임을 먼저 못 박습니다.'] },
+    en: { ask:['How does this company make money — in buying, making, or selling?'],
+          watch:['The idea that "ERP creates the accounting" — it only records events that already happened.'],
+          answer:['Thirty minutes, one cycle. Establish up front that each screen is a phase of the same transaction, not a separate feature.'] },
+  },
+  master: {
+    ko: { ask:['표준원가 $45는 누가 정했고, 기중에 바꿀 수 있습니까?'],
+          watch:['BOM을 단순 부품목록으로만 보는 것 — BOM은 부서 간 합의된 원가 계산식입니다.'],
+          answer:['하위(반제품)부터 계산·릴리즈해야 상위가 맞습니다. 순서를 어기면 완제품이 옛 값을 물고 갑니다. 릴리즈는 승인 통제(C-10) 지점입니다.'] },
+    en: { ask:['Who set the $45 standard, and can it change mid-period?'],
+          watch:['Treating the BOM as a parts list — it is an agreed costing formula across departments.'],
+          answer:['Lower level first, then upper. Out of order, the finished good carries a stale figure. Release is an approval control (C-10).'] },
+  },
+  mm: {
+    ko: { ask:['$5에 샀는데 재고는 왜 $5.50으로 잡힙니까? 그 차액 $50은 누구 돈입니까?'],
+          watch:['구매가격차이를 "손실"로 오해하는 것 — 이번엔 싸게 산 유리한 차이입니다.'],
+          answer:['재고는 표준가로 평가하고 차액은 PPV로 분리합니다. 이 PPV가 뒤의 원가결산에서 재고와 매출원가로 배부됩니다. 3-way 매칭(C-01)이 지급 전 통제입니다.'] },
+    en: { ask:['We paid $5 — why is inventory booked at $5.50, and whose money is the $50?'],
+          watch:['Reading purchase price variance as a loss — here it is favourable, we bought below standard.'],
+          answer:['Inventory is valued at standard and the difference is split out as PPV, which the costing close later allocates. Three-way match (C-01) gates payment.'] },
+  },
+  pp: {
+    ko: { ask:['반제품을 먼저 만들지 않고 완제품부터 만들면 무엇이 틀어집니까?'],
+          watch:['생산차이를 "실수"로 보는 것 — 표준과 실제의 차이는 정상이며, 크기와 원인이 관건입니다.'],
+          answer:['하위→상위 순서가 규율입니다. 반제품 차이 $467.50(불리)과 완제품 -$30(유리)의 부호가 반대라는 점을 반드시 짚어 주세요.'] },
+    en: { ask:['What breaks if you build the finished good before the semi-finished one?'],
+          watch:['Reading production variance as a mistake — variance is normal; its size and cause are the question.'],
+          answer:['Lower-to-upper is the discipline. Point out the opposite signs: $467.50 unfavourable on SF, -$30 favourable on FG.'] },
+  },
+  fico: {
+    ko: { ask:['표준으로 한 달을 돌렸는데, 기말에 무엇을 어디로 보내야 합니까?'],
+          watch:['결산을 "장부 정리"로만 보는 것 — 재고자산 금액과 당기손익이 여기서 결정됩니다.'],
+          answer:['RM→SF→FG 순서로 롤업하고 결산전기로 재고·매출원가를 실제에 맞춥니다. 마감 후 재오픈 불가(C-05)를 강조하세요.'] },
+    en: { ask:['We ran the month on standard — at close, what moves where?'],
+          watch:['Seeing the close as bookkeeping tidy-up — inventory value and current profit are decided here.'],
+          answer:['Roll up RM→SF→FG, then post closing to bring inventory and COGS to actual. Stress that the period locks afterwards (C-05).'] },
+  },
+  overhead: {
+    ko: { ask:['공장에서 쓴 전기요금과 본사 임차료는 왜 다르게 흘러갑니까?'],
+          watch:['모든 비용이 제품원가에 붙는다는 오해 — SG&A는 제품에 직접 추적되지 않습니다.'],
+          answer:['제조원가는 제품(WIP)으로, 일반경비는 원가센터를 거쳐 CO-PA로 직접 배분됩니다. 배분 후 Pool 잔액 0 확인이 완결성 통제(C-09)입니다.'] },
+    en: { ask:['Why does factory electricity flow differently from head-office rent?'],
+          watch:['Assuming every cost lands in product cost — SG&A is not traced to product.'],
+          answer:['Production cost flows to WIP; overhead pools in a cost centre and is assessed straight to CO-PA. A nil pool afterwards is the completeness control (C-09).'] },
+  },
+  sd: {
+    ko: { ask:['물건을 보낸 날과 세금계산서를 끊은 날 중, 매출은 언제 인식됩니까?'],
+          watch:['출하와 청구를 한 사건으로 뭉뚱그리는 것 — 원가와 매출의 인식 시점이 다릅니다.'],
+          answer:['출하 시 매출원가(표준), 청구 시 매출·채권. 두 시점이 다른 기간에 걸치면 손익이 왜곡됩니다(C-08 기간귀속).'] },
+    en: { ask:['Between the ship date and the invoice date, when is revenue recognised?'],
+          watch:['Collapsing goods issue and billing into one event — cost and revenue are recognised at different moments.'],
+          answer:['COGS at goods issue (at standard), revenue and receivable at billing. Straddling periods distorts profit (C-08 cut-off).'] },
+  },
+  copa: {
+    ko: { ask:['표준마진 70%가 실제 56%로 떨어졌습니다. 14%p는 어디서 사라졌습니까?'],
+          watch:['마진 하락을 영업 탓으로 돌리는 것 — 대부분 생산·구매 단계에서 이미 결정됐습니다.'],
+          answer:['구매(PPV)·생산(정산차이)·일반경비의 모든 차이가 여기로 모입니다. 앞 화면들을 거슬러 짚으며 원인을 지목하세요.'] },
+    en: { ask:['Standard margin 70% became 56% actual — where did the 14 points go?'],
+          watch:['Blaming sales for the drop — most of it was decided upstream in purchasing and production.'],
+          answer:['Every variance from buying, making and overhead converges here. Walk back through the earlier screens and name each source.'] },
+  },
+  ledger: {
+    ko: { ask:['이 전표가 진짜라는 걸 감사인에게 어떻게 보여줍니까?'],
+          watch:['원장을 "결과 목록"으로만 보는 것 — 문서 체인이 곧 증거입니다.'],
+          answer:['전표번호와 선행문서 체인(PO→MD→AC)을 따라가며 추적성을 보이고, 시산표 차변=대변으로 마무리합니다. 감사 패키지 인쇄를 시연하세요.'] },
+    en: { ask:['How would you show an auditor that this document is real?'],
+          watch:['Reading the ledger as a list of results — the document chain is the evidence.'],
+          answer:['Trace the numbers and predecessors (PO→MD→AC), then close on debits = credits. Demonstrate the audit pack print.'] },
+  },
+};
+const InstructorNotes = ({ tab, lang }) => {
+  const n = INSTRUCTOR_NOTES[tab];
+  if (!n) return null;
+  const ko = lang === 'ko';
+  const x = ko ? n.ko : n.en;
+  const block = (icon, title, items, color) => (
+    <div className="mb-1.5 last:mb-0">
+      <div className={`text-[10px] font-bold ${color}`}>{icon} {title}</div>
+      {items.map((t, i) => <div key={i} className="text-[11px] text-slate-200 leading-snug">{t}</div>)}
+    </div>
+  );
+  return (
+    <div className="border-t border-white/10 bg-black/25 px-4 py-2">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-1">
+        {block('❓', ko?'던질 질문':'Ask the room', x.ask, 'text-amber-300')}
+        {block('⚠', ko?'흔한 오해':'Watch for', x.watch, 'text-rose-300')}
+        {block('🎯', ko?'짚어야 할 결론':'Land this', x.answer, 'text-emerald-300')}
+      </div>
+    </div>
+  );
+};
+
 /* Chapter intro slide — a full-screen story popup shown on entering each
    chapter. Click anywhere (or the CTA) to reveal the live demo screen. */
 const StorySlide = ({ idx, lang, onClose }) => {
@@ -2031,6 +2132,9 @@ const StoryBar = ({ idx, setIdx, onExit, setActiveTab, lang }) => {
   const total = STORY_CHAPTERS.length;
   const [elapsed, setElapsed] = useState(0);
   const [showSlide, setShowSlide] = useState(true); // slide pops on entering each chapter
+  // Off by default: the bar is often projected, and these notes are for the
+  // presenter's eyes rather than the audience's.
+  const [showNotes, setShowNotes] = useState(false);
   useEffect(() => {
     const t = setInterval(() => setElapsed(e => e + 1), 1000);
     return () => clearInterval(t);
@@ -2064,6 +2168,11 @@ const StoryBar = ({ idx, setIdx, onExit, setActiveTab, lang }) => {
           {(ko ? ch.pointsKo : ch.pointsEn).map((p, i) => <li key={i} className="truncate">· {p}</li>)}
         </ul>
         <div className="shrink-0 flex items-center gap-1.5">
+          <button onClick={() => setShowNotes(n => !n)}
+            className={`px-2.5 py-1.5 rounded text-xs font-semibold ${showNotes ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20'}`}
+            title={ko ? '강사용 노트 — 질문·오해·결론 (청중에게 투사 시 주의)' : 'Instructor notes — questions, misconceptions, takeaway'}>
+            🎓 {ko ? '강사 노트' : 'Notes'}
+          </button>
           <button onClick={() => setShowSlide(true)}
             className="px-2.5 py-1.5 rounded text-xs font-semibold bg-white/10 hover:bg-white/20"
             title={ko ? '챕터 슬라이드 다시 보기' : 'Reopen chapter slide'}>🖼 {ko ? '슬라이드' : 'Slide'}</button>
@@ -2074,6 +2183,7 @@ const StoryBar = ({ idx, setIdx, onExit, setActiveTab, lang }) => {
           <button onClick={onExit} className="px-2 py-1.5 rounded text-xs text-slate-400 hover:text-white hover:bg-white/10">✕ {ko ? '종료' : 'Exit'}</button>
         </div>
       </div>
+      {showNotes && <InstructorNotes tab={ch.tab} lang={lang} />}
       <div className="h-1 bg-white/10">
         <span className="block h-full bg-indigo-400 transition-all" style={{ width: ((idx + 1) / total * 100) + '%' }} />
       </div>

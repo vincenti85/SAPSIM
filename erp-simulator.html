@@ -5027,6 +5027,149 @@ const DryrunTab = ({ lang }) => {
    TAB 8: CO-PA DETAILED PROFITABILITY ANALYSIS
    ========================================================================= */
 /* =========================================================================
+   PROBLEM BANK — named, repeatable practice cases built on the scenario
+   presets. An instructor picks a problem so every learner starts from the
+   same figures; each carries a question whose answer is *computed* from the
+   patched parameters rather than stored, so an answer can never drift out of
+   step with the engine.
+
+   A patch overrides only the fields it names, leaving the rest of the
+   scenario intact.
+   ========================================================================= */
+const applyPatch = (params, patch) => {
+  if (!patch) return params;
+  const ppIdx = (code) => Math.max(0, params.pp.findIndex(o => o.outCode === code));
+  const next = {
+    mm: params.mm.map(r => ({ ...r })),
+    pp: params.pp.map(o => ({ ...o, components: o.components.map(c => ({ ...c })) })),
+    sd: params.sd.map(r => ({ ...r })),
+  };
+  if (patch.mm0)  next.mm[0] = { ...next.mm[0], ...patch.mm0 };
+  if (patch.mm1 && next.mm[1]) next.mm[1] = { ...next.mm[1], ...patch.mm1 };
+  if (patch.ppSF) { const i = ppIdx('SF001'); next.pp[i] = { ...next.pp[i], ...patch.ppSF }; }
+  if (patch.ppFG) { const i = ppIdx('FG001'); next.pp[i] = { ...next.pp[i], ...patch.ppFG }; }
+  if (patch.sd0)  next.sd[0] = { ...next.sd[0], ...patch.sd0 };
+  return next;
+};
+const PROBLEM_BANK = [
+  { id:'auto-base', scenario:'auto', level:1,
+    ko:['기본 사례','표준 조건 그대로 한 사이클을 완주합니다.','순 원가차이는 얼마이고, 유리·불리 중 어느 쪽입니까?'],
+    en:['Baseline','Run one full cycle on standard conditions.','What is the net variance, and is it favourable or unfavourable?'],
+    patch:null },
+  { id:'auto-spike', scenario:'auto', level:2,
+    ko:['원자재 급등','알루미늄 시세가 올라 발주가가 $7.20이 되었습니다. 표준가는 그대로 $5.50입니다.',
+        '구매가격차이는 얼마이며 방향은 어떻게 바뀝니까?'],
+    en:['Raw material spike','Aluminium rises to $7.20 per KG while the standard stays at $5.50.',
+        'What is the purchase price variance, and which way does it now point?'],
+    patch:{ mm0:{ poPrice:7.20 } } },
+  { id:'auto-labor', scenario:'auto', level:2,
+    ko:['생산 지연','반제품 라인에서 예정 20시간이 아니라 30시간이 투입되었습니다.',
+        '반제품 생산차이는 얼마나 커집니까?'],
+    en:['Production overrun','The semi-finished line took 30 labour hours instead of the planned 20.',
+        'How much larger does the semi-finished production variance become?'],
+    patch:{ ppSF:{ laborHr:30 } } },
+  { id:'auto-volume', scenario:'auto', level:3,
+    ko:['전량 판매','생산한 완제품 10개를 모두 판매했습니다.',
+        '차이 배부에서 매출원가로 가는 몫은 어떻게 달라집니까?'],
+    en:['Sell everything','All ten finished units are sold this period.',
+        'How does the share of variance going to COGS change?'],
+    patch:{ sd0:{ qty:10 } } },
+  { id:'coffee-drop', scenario:'coffee', level:2,
+    ko:['생두 시세 하락','생두를 $6.90에 확보했습니다. 표준가는 $8.20입니다.',
+        '구매가격차이와 순 원가차이는 각각 얼마입니까?'],
+    en:['Green bean price drop','Green beans secured at $6.90 against an $8.20 standard.',
+        'What are the purchase price variance and the net variance?'],
+    patch:{ mm0:{ poPrice:6.90 } } },
+  { id:'elec-squeeze', scenario:'electronics', level:3,
+    ko:['공급가 인상 미반영','PCB 공급가가 $5.20으로 올랐는데 표준가 $4.20은 갱신되지 않았습니다.',
+        '이 상태로 결산하면 표준원가 정확도는 어떻게 됩니까?'],
+    en:['Standard not updated','The PCB supply price rose to $5.20 but the $4.20 standard was left unchanged.',
+        'What happens to standard-cost accuracy if you close on this basis?'],
+    patch:{ mm0:{ poPrice:5.20 } } },
+];
+const ProblemBankTab = ({ scenarioId, simParams, materials, onLoadProblem, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const [revealed, setRevealed] = useState({});
+  const money = (n) => `${n < 0 ? '−' : ''}$${Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  // Expected figures are derived from the patched preset, never stored.
+  const solve = (p) => {
+    const sc = scenarioById(p.scenario);
+    const data = cloneScenarioData(sc);
+    const v = computeVariances(applyPatch(data.params, p.patch), data.materials);
+    return v;
+  };
+  const levelCls = { 1:'bg-green-100 text-green-700', 2:'bg-amber-100 text-amber-700', 3:'bg-rose-100 text-rose-700' };
+  const levelLabel = { 1: ko?'기초':'Basic', 2: ko?'응용':'Applied', 3: ko?'심화':'Advanced' };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h2 className="text-base font-bold text-slate-800">📚 {ko?'문제은행':'Problem bank'}</h2>
+        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+          {ko ? '같은 프로세스를 조건만 바꿔 반복 실습하는 문제 모음입니다. 문제를 불러오면 해당 사례와 조건이 적용되고 진행 상태가 초기화되므로, 수업 참가자 전원이 동일한 숫자에서 출발합니다.'
+              : 'Repeatable cases that change only the conditions. Loading a problem applies its scenario and figures and clears progress, so everyone in the room starts from the same numbers.'}
+        </p>
+        <p className="text-[11px] text-slate-400 mt-1.5">
+          {ko ? '정답은 저장된 값이 아니라 문제 조건에서 계산됩니다 — 엔진이 바뀌어도 정답이 어긋나지 않습니다.'
+              : 'Answers are computed from the problem’s own conditions, not stored, so they cannot fall out of step with the engine.'}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {PROBLEM_BANK.map((p, i) => {
+          const [title, brief, question] = ko ? p.ko : p.en;
+          const sc = scenarioById(p.scenario);
+          const v = solve(p);
+          const open = !!revealed[p.id];
+          return (
+            <div key={p.id} className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-mono text-slate-400">{String(i + 1).padStart(2, '0')}</span>
+                <span className="text-sm font-bold text-slate-800">{title}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${levelCls[p.level]}`}>{levelLabel[p.level]}</span>
+                <span className="text-[10px] text-slate-400 ml-auto">{sc.icon} {ko?sc.ko:sc.en}</span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{brief}</p>
+              <p className="text-xs font-semibold text-indigo-700 mt-1.5">❓ {question}</p>
+
+              {open && (
+                <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2 text-[11px] space-y-0.5">
+                  <div className="flex justify-between"><span className="text-slate-500">{ko?'구매가격차이':'Purchase variance'}</span>
+                    <span className={`font-semibold ${v.ppv >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {money(v.ppv)} {v.ppv >= 0 ? (ko?'유리':'fav.') : (ko?'불리':'unfav.')}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{ko?'반제품 생산차이':'SF production variance'}</span>
+                    <span className="font-semibold">{money(v.hVar)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{ko?'완제품 생산차이':'FG production variance'}</span>
+                    <span className="font-semibold">{money(v.fVar)}</span></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-0.5 mt-0.5">
+                    <span className="text-slate-600 font-semibold">{ko?'순 원가차이':'Net variance'}</span>
+                    <span className={`font-bold ${v.net > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                      {money(v.net)} {v.net > 0 ? (ko?'불리':'unfav.') : (ko?'유리':'fav.')}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{ko?'매출원가 배부 몫':'Share to COGS'}</span>
+                    <span className="font-semibold">{(v.soldRatio * 100).toFixed(0)}% · {money(+(v.net * v.soldRatio).toFixed(2))}</span></div>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-2.5">
+                <button onClick={() => onLoadProblem(p)}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">
+                  ▶ {ko?'이 문제로 실습':'Practise this'}
+                </button>
+                <button onClick={() => setRevealed(r => ({ ...r, [p.id]: !r[p.id] }))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-50">
+                  {open ? (ko?'정답 숨기기':'Hide answer') : (ko?'정답 확인':'Reveal answer')}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
    WHAT-IF LEVERS — turn the fixed scenario into a decision the learner can
    make. Each slider edits one simulation parameter, and because the journal
    engine and CO-PA both derive from those parameters, the consequence shows
@@ -6202,6 +6345,17 @@ function App() {
     setSimParams(data.params);
     clearAllSteps();
   };
+  // Load a bank problem: its scenario, then its condition overrides.
+  const [activeProblem, setActiveProblem] = useState(null);
+  const loadProblem = (p) => {
+    const data = cloneScenarioData(scenarioById(p.scenario));
+    setScenarioId(p.scenario);
+    setMaterials(data.materials);
+    setSimParams(applyPatch(data.params, p.patch));
+    clearAllSteps();
+    setActiveProblem(p);
+    setActiveTab(viewMode === 'field' ? 'home_field' : 'home_acct');
+  };
 
   /* ---- Snapshot: export/import the exact state behind a printed pack, so a
      reviewer can reproduce the same figures rather than take them on trust. */
@@ -6497,6 +6651,7 @@ function App() {
     { id:'overhead', label:lang==='ko'?'일반경비':'General/Overhead Expense', icon:'🧾' },
     { id:'rcm',     label:lang==='ko'?'통제 매트릭스':'Control Matrix', icon:'🛡' },
     { id:'walkthrough', label:lang==='ko'?'워크스루':'Walkthrough', icon:'🔎' },
+    { id:'problems', label:lang==='ko'?'문제은행':'Problem bank', icon:'📚' },
     { id:'sd',      label:tabLabels[4], icon:'💵' },
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
@@ -6516,7 +6671,7 @@ function App() {
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
     { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
-    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
+    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params','problems'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
   const ROLE_GROUPS = [
@@ -6526,7 +6681,7 @@ function App() {
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
     { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm','walkthrough'] },
-    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params'] },
+    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params','problems'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
   const activeGroup = NAV_GROUPS.find(g => g.tabIds.includes(activeTab)) || NAV_GROUPS[0];
@@ -6693,6 +6848,18 @@ function App() {
       <main className="flex-1 min-w-0 py-5 relative">
         {!unlocked && <LandingHero lang={lang} onFocusPin={() => focusPin(0)} />}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
+        {unlocked && activeProblem && (activeTab==='home_acct' || activeTab==='home_field') && (
+          <div className="mb-4 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-xs font-bold text-indigo-800">
+              📚 {lang==='ko'?'문제 실습 중':'Working a problem'} — {(lang==='ko'?activeProblem.ko:activeProblem.en)[0]}
+            </span>
+            <span className="text-[11px] text-indigo-700 flex-1 min-w-[200px]">
+              ❓ {(lang==='ko'?activeProblem.ko:activeProblem.en)[2]}
+            </span>
+            <button onClick={() => setActiveProblem(null)}
+              className="text-[11px] text-indigo-600 hover:underline">{lang==='ko'?'문제 해제':'Clear'}</button>
+          </div>
+        )}
         {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
           <ScenarioPicker scenarioId={scenarioId} onApply={applyScenario} allSteps={allSteps} lang={lang} />}
         {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
@@ -6711,6 +6878,8 @@ function App() {
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
         {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} onPrintAuditPack={printAuditPack} onExportSnapshot={exportSnapshot} onImportSnapshot={importSnapshot} />}
         {activeTab==='rcm' && <RcmTab allSteps={allSteps} setActiveTab={setActiveTab} lang={lang} />}
+        {activeTab==='problems' && <ProblemBankTab scenarioId={scenarioId} simParams={simParams} materials={materials}
+          onLoadProblem={loadProblem} lang={lang} />}
         {activeTab==='walkthrough' && <WalkthroughTab allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} />}
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}

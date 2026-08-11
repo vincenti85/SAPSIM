@@ -5027,6 +5027,199 @@ const DryrunTab = ({ lang }) => {
    TAB 8: CO-PA DETAILED PROFITABILITY ANALYSIS
    ========================================================================= */
 /* =========================================================================
+   INSTRUCTOR VIEW — a class roster assembled from learner snapshot files.
+   No backend: learners export their snapshot, the instructor drops the
+   folder in here and gets progress, quiz score and integrity per learner,
+   exportable as CSV for their own records.
+   ========================================================================= */
+const rosterRow = (snap, fileName, lang) => {
+  const steps = snap.steps || {};
+  const allSteps = Object.assign({}, ...Object.values(steps).filter(v => v && typeof v === 'object'));
+  const mats = snap.materials || [];
+  const params = snap.simParams || { mm:[], pp:[], sd:[] };
+  const st = completionStats(allSteps);
+  let balanced = null, docs = 0;
+  try {
+    const led = buildLedger(allSteps, params, mats, lang);
+    balanced = led.balanced;
+    docs = led.entries.filter(e => e.docNo).length;
+  } catch (e) { /* a malformed snapshot should not take the whole roster down */ }
+  const q = snap.quizStats || { attempted:0, perfect:0, rows:0, correctRows:0 };
+  const sc = scenarioById(snap.scenarioId || 'auto');
+  const prob = PROBLEM_BANK.find(p => p.id === snap.problemId);
+  return {
+    file: fileName,
+    learner: snap.learner || '',
+    scenario: sc, problem: prob,
+    when: snap.exportedAt ? snap.exportedAt.slice(0, 16).replace('T', ' ') : '',
+    pct: st.pct, done: st.done, total: st.total,
+    modules: st.rows,
+    quizAttempted: q.attempted, quizPerfect: q.perfect,
+    quizAcc: q.rows ? Math.round(q.correctRows / q.rows * 100) : null,
+    controls: CONTROLS.filter(c => allSteps[c.at]).length,
+    balanced, docs,
+  };
+};
+const InstructorTab = ({ lang='ko' }) => {
+  const ko = lang === 'ko';
+  const [rows, setRows] = useState([]);
+  const [errors, setErrors] = useState([]);
+
+  const readFiles = (fileList) => {
+    const files = Array.from(fileList);
+    if (!files.length) return;
+    const bad = [];
+    Promise.all(files.map(f => new Promise(resolve => {
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const snap = JSON.parse(r.result);
+          if (snap.kind !== 'erp-simulator-snapshot') throw new Error('not a snapshot');
+          resolve(rosterRow(snap, f.name, lang));
+        } catch (e) { bad.push(f.name); resolve(null); }
+      };
+      r.onerror = () => { bad.push(f.name); resolve(null); };
+      r.readAsText(f);
+    }))).then(res => {
+      const ok = res.filter(Boolean);
+      // Re-importing the same learner replaces the earlier row rather than
+      // stacking duplicates.
+      setRows(prev => {
+        const merged = [...prev];
+        ok.forEach(r => {
+          const i = merged.findIndex(m => (m.learner && m.learner === r.learner) || m.file === r.file);
+          if (i >= 0) merged[i] = r; else merged.push(r);
+        });
+        return merged.sort((a, b) => b.pct - a.pct);
+      });
+      setErrors(bad);
+    });
+  };
+
+  const exportCsv = () => {
+    const head = ko
+      ? ['이수자','파일','사례','문제','진행률(%)','실행단계','전표수','장부정합','통제작동','분개시도','전량정답','줄정확도(%)','제출시각']
+      : ['Learner','File','Scenario','Problem','Progress %','Steps run','Documents','Balanced','Controls','Quiz attempts','Perfect','Line accuracy %','Submitted'];
+    const body = rows.map(r => [
+      r.learner, r.file, ko ? r.scenario.ko : r.scenario.en,
+      r.problem ? (ko ? r.problem.ko[0] : r.problem.en[0]) : '',
+      r.pct, `${r.done}/${r.total}`, r.docs,
+      r.balanced === null ? '' : (r.balanced ? 'OK' : 'NG'),
+      `${r.controls}/${CONTROLS.length}`,
+      r.quizAttempted, r.quizPerfect, r.quizAcc === null ? '' : r.quizAcc, r.when,
+    ]);
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    // BOM so Excel opens the Korean headers in the right encoding.
+    const csv = '﻿' + [head, ...body].map(r => r.map(esc).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `erp-roster-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const th = 'px-2.5 py-2 text-left font-semibold';
+  const td = 'px-2.5 py-1.5';
+  const avg = rows.length ? Math.round(rows.reduce((s, r) => s + r.pct, 0) / rows.length) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h2 className="text-base font-bold text-slate-800">🧑‍🏫 {ko?'강사 뷰 — 학습 현황':'Instructor view — class roster'}</h2>
+        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+          {ko ? '학습자가 분개원장 탭에서 「스냅샷 저장」으로 내려받은 파일을 한 번에 여러 개 선택해 불러오면, 진도·채점·장부 정합을 한 표로 볼 수 있습니다. 서버에 아무것도 전송되지 않으며, 파일은 이 브라우저에서만 읽습니다.'
+              : 'Learners save a snapshot from the Journal tab; select several files at once here to see progress, quiz results and book integrity in one table. Nothing is uploaded — the files are read in this browser only.'}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <label className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold cursor-pointer hover:bg-indigo-700">
+            📂 {ko?'스냅샷 불러오기 (여러 개 선택)':'Load snapshots (multi-select)'}
+            <input type="file" accept="application/json,.json" multiple className="hidden"
+              onChange={e => { readFiles(e.target.files); e.target.value=''; }} />
+          </label>
+          {rows.length > 0 && (
+            <>
+              <button onClick={exportCsv}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50">
+                ⬇ {ko?'CSV 내보내기':'Export CSV'}
+              </button>
+              <button onClick={() => { setRows([]); setErrors([]); }}
+                className="px-3 py-1.5 rounded-lg text-slate-500 text-xs hover:bg-slate-100">
+                {ko?'목록 비우기':'Clear'}
+              </button>
+              <span className="text-[11px] text-slate-500 ml-1">
+                {ko?'인원':'Learners'} <strong>{rows.length}</strong> · {ko?'평균 진행률':'Avg progress'} <strong>{avg}%</strong>
+              </span>
+            </>
+          )}
+        </div>
+        {errors.length > 0 && (
+          <p className="text-[11px] text-red-600 mt-2">
+            ⚠ {ko?'읽을 수 없는 파일: ':'Could not read: '}{errors.join(', ')}
+          </p>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-400">
+          {ko ? '아직 불러온 스냅샷이 없습니다.' : 'No snapshots loaded yet.'}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <table className="w-full text-xs min-w-[900px]">
+            <thead>
+              <tr className="bg-slate-700 text-white">
+                <th className={th}>{ko?'이수자':'Learner'}</th>
+                <th className={th}>{ko?'사례 / 문제':'Scenario / problem'}</th>
+                <th className={th+' w-40'}>{ko?'진행률':'Progress'}</th>
+                <th className={th}>{ko?'전표':'Docs'}</th>
+                <th className={th}>{ko?'장부':'Books'}</th>
+                <th className={th}>{ko?'통제':'Controls'}</th>
+                <th className={th}>{ko?'분개 채점':'Quiz'}</th>
+                <th className={th}>{ko?'제출':'Submitted'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className={`border-b border-slate-50 ${i%2?'bg-slate-50/60':'bg-white'}`}>
+                  <td className={td+' font-semibold text-slate-800'}>
+                    {r.learner || <span className="text-slate-400 font-normal">{ko?'(이름 없음)':'(unnamed)'}</span>}
+                    <div className="text-[10px] text-slate-400 font-normal">{r.file}</div>
+                  </td>
+                  <td className={td+' text-slate-600'}>
+                    {r.scenario.icon} {ko?r.scenario.ko:r.scenario.en}
+                    {r.problem && <div className="text-[10px] text-indigo-600">📚 {ko?r.problem.ko[0]:r.problem.en[0]}</div>}
+                  </td>
+                  <td className={td}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden min-w-[60px]">
+                        <span className={`block h-full rounded-full ${r.pct===100?'bg-green-500':'bg-indigo-400'}`} style={{width:r.pct+'%'}} />
+                      </div>
+                      <span className="font-semibold text-slate-700 tabular-nums">{r.pct}%</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">{r.done}/{r.total} {ko?'단계':'steps'}</div>
+                  </td>
+                  <td className={td+' text-slate-600'}>{r.docs}</td>
+                  <td className={td}>
+                    {r.balanced === null ? <span className="text-slate-400">—</span>
+                      : r.balanced ? <span className="text-green-600 font-semibold">✅</span>
+                                   : <span className="text-red-600 font-semibold">⚠</span>}
+                  </td>
+                  <td className={td+' text-slate-600'}>{r.controls}/{CONTROLS.length}</td>
+                  <td className={td+' text-slate-600'}>
+                    {r.quizAttempted === 0 ? <span className="text-slate-400">—</span>
+                      : <>{r.quizPerfect}/{r.quizAttempted}<span className="text-[10px] text-slate-400"> · {r.quizAcc}%</span></>}
+                  </td>
+                  <td className={td+' text-[10px] text-slate-400'}>{r.when}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* =========================================================================
    PROBLEM BANK — named, repeatable practice cases built on the scenario
    presets. An instructor picks a problem so every learner starts from the
    same figures; each carries a question whose answer is *computed* from the
@@ -6360,17 +6553,25 @@ function App() {
   /* ---- Snapshot: export/import the exact state behind a printed pack, so a
      reviewer can reproduce the same figures rather than take them on trust. */
   const exportSnapshot = () => {
+    // v2 adds who ran it and under what conditions, so an instructor can
+    // build a class roster from a folder of these files. v1 files still
+    // load — the reader treats the extra fields as optional.
     const snap = {
-      kind: 'erp-simulator-snapshot', version: 1,
+      kind: 'erp-simulator-snapshot', version: 2,
       exportedAt: new Date().toISOString(),
+      learner: learnerName || '',
+      scenarioId,
+      problemId: activeProblem ? activeProblem.id : null,
+      quizStats,
       materials, simParams,
       steps: { ckSteps, mmSteps, mmReturnSteps, miSteps, sdebSteps, ppSteps,
                ficoSteps, mr21Steps, overheadSteps, sdSteps, sdReturnSteps },
     };
+    const safe = (learnerName || 'snapshot').replace(/[^\w가-힣-]+/g, '_');
     const url = URL.createObjectURL(new Blob([JSON.stringify(snap, null, 2)], { type:'application/json' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `erp-simulator-snapshot-${snap.exportedAt.slice(0,10)}.json`;
+    a.download = `erp-${safe}-${snap.exportedAt.slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -6652,6 +6853,7 @@ function App() {
     { id:'rcm',     label:lang==='ko'?'통제 매트릭스':'Control Matrix', icon:'🛡' },
     { id:'walkthrough', label:lang==='ko'?'워크스루':'Walkthrough', icon:'🔎' },
     { id:'problems', label:lang==='ko'?'문제은행':'Problem bank', icon:'📚' },
+    { id:'instructor', label:lang==='ko'?'강사 뷰':'Instructor', icon:'🧑‍🏫' },
     { id:'sd',      label:tabLabels[4], icon:'💵' },
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
@@ -6671,7 +6873,7 @@ function App() {
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
     { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
-    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params','problems'] },
+    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params','problems','instructor'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
   const ROLE_GROUPS = [
@@ -6681,7 +6883,7 @@ function App() {
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
     { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm','walkthrough'] },
-    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params','problems'] },
+    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params','problems','instructor'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
   const activeGroup = NAV_GROUPS.find(g => g.tabIds.includes(activeTab)) || NAV_GROUPS[0];
@@ -6878,6 +7080,7 @@ function App() {
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
         {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} onPrintAuditPack={printAuditPack} onExportSnapshot={exportSnapshot} onImportSnapshot={importSnapshot} />}
         {activeTab==='rcm' && <RcmTab allSteps={allSteps} setActiveTab={setActiveTab} lang={lang} />}
+        {activeTab==='instructor' && <InstructorTab lang={lang} />}
         {activeTab==='problems' && <ProblemBankTab scenarioId={scenarioId} simParams={simParams} materials={materials}
           onLoadProblem={loadProblem} lang={lang} />}
         {activeTab==='walkthrough' && <WalkthroughTab allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} />}

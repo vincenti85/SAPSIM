@@ -4800,26 +4800,41 @@ const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
    standard-vs-actual difference expensed straight to COGS, or split across
    remaining inventory and goods sold? Figures come from the live parameters.
    ========================================================================= */
-const VarianceAllocation = ({ simParams, materials, lang='ko' }) => {
-  const ko = lang === 'ko';
-  const [allToCogs, setAllToCogs] = useState(false);
+/* Variance maths shared by the allocation waterfall and the KPI scorecard —
+   one computation so the two views can never report different numbers.
+   Sign convention: ppv positive = favourable, production variance positive =
+   unfavourable, net positive = unfavourable overall. */
+function computeVariances(simParams, materials) {
   const stdOfM = (c) => parseFloat((materials.find(m => m.MaterialCode === c) || { StandardPrice:'0' }).StandardPrice);
-
   const mm0 = simParams.mm[0] || { qty:100, stdPrice:5.50, poPrice:5.00 };
   const ppH = simParams.pp.find(o => o.outCode === 'SF001') || simParams.pp[0] || { outQty:20, components:[], laborHr:20, laborRate:14.675, machineHr:10, machineRate:14 };
   const ppF = simParams.pp.find(o => o.outCode === 'FG001') || simParams.pp[1] || { outQty:10, components:[], laborHr:5, laborRate:25, machineHr:2.5, machineRate:35 };
-  const sd0 = simParams.sd[0] || { matCode:'FG001', qty:5 };
+  const sd0 = simParams.sd[0] || { matCode:'FG001', qty:5, salesPrice:150 };
 
   const comp = (o) => (o.components || []).reduce((s, c) => s + c.consumQty * stdOfM(c.code), 0);
   const act  = (o) => o.laborHr * o.laborRate + o.machineHr * o.machineRate;
-  const ppv  = +(mm0.qty * (mm0.stdPrice - mm0.poPrice)).toFixed(2);      // favourable = positive
+  const ppv  = +(mm0.qty * (mm0.stdPrice - mm0.poPrice)).toFixed(2);
   const hVar = +((comp(ppH) + act(ppH)) - ppH.outQty * stdOfM('SF001')).toFixed(2);
   const fVar = +((comp(ppF) + act(ppF)) - ppF.outQty * stdOfM('FG001')).toFixed(2);
-  const net  = +(hVar + fVar - ppv).toFixed(2);                            // unfavourable = positive
+  const net  = +(hVar + fVar - ppv).toFixed(2);
 
   const producedQty = ppF.outQty || 0;
   const soldQty     = Math.min(sd0.qty || 0, producedQty);
   const soldRatio   = producedQty > 0 ? soldQty / producedQty : 0;
+
+  const fgStd   = stdOfM(sd0.matCode) || stdOfM('FG001');
+  const revenue = +((sd0.qty || 0) * (sd0.salesPrice || 0)).toFixed(2);
+  const stdCogs = +((sd0.qty || 0) * fgStd).toFixed(2);
+
+  return { stdOfM, mm0, ppH, ppF, sd0, ppv, hVar, fVar, net,
+           producedQty, soldQty, soldRatio, fgStd, revenue, stdCogs };
+}
+
+const VarianceAllocation = ({ simParams, materials, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const [allToCogs, setAllToCogs] = useState(false);
+  const { ppv, hVar, fVar, net, producedQty, soldQty, soldRatio } = computeVariances(simParams, materials);
+
   const toCogs = allToCogs ? net : +(net * soldRatio).toFixed(2);
   const toInv  = allToCogs ? 0   : +(net - toCogs).toFixed(2);
 
@@ -5155,6 +5170,121 @@ const ModeBanner = ({ viewMode, lang='ko' }) => {
     </div>
   );
 };
+/* =========================================================================
+   KPI SCORECARD — turns the deterministic result into outcome metrics the
+   learner is steering toward, plus goal badges. Shown on both home screens.
+   Metrics are named for what they actually measure: a single production
+   cycle has no meaningful inventory *turnover*, so the fourth tile reports
+   sell-through (sold / produced) instead of inventing a turnover ratio.
+   ========================================================================= */
+const KPI_GOALS = [
+  { id:'run',   icon:'🏃', ko:['전 과정 완주','마스터~매출 5개 모듈 모두 실행'],
+                           en:['Full cycle run','All five modules executed'] },
+  { id:'close', icon:'📆', ko:['원가결산 완료','실제원가가 재고·매출원가에 반영됨'],
+                           en:['Costing closed','Actual cost posted to inventory and COGS'] },
+  { id:'ctrl',  icon:'🛡', ko:['통제 작동','내재 통제 6건 이상 작동'],
+                           en:['Controls exercised','At least six embedded controls operated'] },
+  { id:'bal',   icon:'⚖️', ko:['장부 정합','차변 합계 = 대변 합계'],
+                           en:['Books balance','Total debits equal total credits'] },
+];
+const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const v = computeVariances(simParams, materials);
+  const closed = !!allSteps.pc;
+
+  const sold    = !!allSteps.vl01n;
+  const billed  = !!allSteps.vf01;
+  const revenue = billed ? v.revenue : 0;
+  const cogs    = sold ? (closed && copa ? copa.actualCOGS : v.stdCogs) : 0;
+  const gp      = +(revenue - cogs).toFixed(2);
+  const gpm     = revenue > 0 ? (gp / revenue * 100) : null;
+
+  // Variance only becomes real once production has been settled.
+  const settled  = !!allSteps.ko88_h || !!allSteps.ko88_f;
+  const netVar   = settled ? v.net : 0;
+  // How closely standard approximates actual — the GAAP question behind
+  // "is your standard cost still a reasonable proxy?"
+  const accuracy = settled && v.stdCogs > 0 ? Math.max(0, 100 - Math.abs(netVar) / v.stdCogs * 100) : null;
+  const sellThru = v.producedQty > 0 && !!allSteps.gr_f ? (v.soldQty / v.producedQty * 100) : null;
+
+  const { balanced } = buildLedger(allSteps, simParams, materials, lang);
+  const ctrlHit = CONTROLS.filter(c => allSteps[c.at]).length;
+  const modulesDone = [
+    ['ck24_f'], ['f53'], ['gr_f'], ['pc'], ['f28'],
+  ].filter(keys => keys.every(x => allSteps[x])).length;
+
+  const goalMet = {
+    run: modulesDone === 5,
+    close: closed,
+    ctrl: ctrlHit >= 6,
+    bal: balanced && Object.values(allSteps).some(Boolean),
+  };
+  const metCount = Object.values(goalMet).filter(Boolean).length;
+
+  const money = (n) => `${n < 0 ? '−' : ''}$${Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const tiles = [
+    { icon:'💰', label: ko?'매출총이익':'Gross profit',
+      value: billed ? money(gp) : '—',
+      sub:   gpm === null ? (ko?'청구 단계 이후 표시':'Shown after billing') : `${ko?'마진':'Margin'} ${gpm.toFixed(1)}%`,
+      tone:  !billed ? 'idle' : gp >= 0 ? 'good' : 'bad' },
+    { icon:'📉', label: ko?'순 원가차이':'Net variance',
+      value: settled ? money(netVar) : '—',
+      sub:   !settled ? (ko?'오더 정산 이후 표시':'Shown after settlement')
+                      : (netVar > 0 ? (ko?'불리 — 원가 초과':'Unfavourable') : netVar < 0 ? (ko?'유리 — 원가 절감':'Favourable') : (ko?'차이 없음':'No variance')),
+      tone:  !settled ? 'idle' : netVar > 0 ? 'bad' : 'good' },
+    { icon:'🎯', label: ko?'표준원가 정확도':'Standard accuracy',
+      value: accuracy === null ? '—' : `${accuracy.toFixed(0)}%`,
+      sub:   accuracy === null ? (ko?'오더 정산 이후 표시':'Shown after settlement')
+                               : (ko?'표준이 실제를 근사하는 정도':'How closely standard tracks actual'),
+      tone:  accuracy === null ? 'idle' : accuracy >= 80 ? 'good' : accuracy >= 50 ? 'warn' : 'bad' },
+    { icon:'📦', label: ko?'재고 소진율':'Sell-through',
+      value: sellThru === null ? '—' : `${sellThru.toFixed(0)}%`,
+      sub:   sellThru === null ? (ko?'완제품 입고 이후 표시':'Shown after finished-goods receipt')
+                               : `${ko?'생산':'Produced'} ${v.producedQty} / ${ko?'판매':'Sold'} ${v.soldQty}`,
+      tone:  sellThru === null ? 'idle' : 'good' },
+  ];
+  const toneCls = {
+    good:'border-green-200 bg-green-50',  bad:'border-red-200 bg-red-50',
+    warn:'border-amber-200 bg-amber-50',  idle:'border-slate-200 bg-white',
+  };
+  const valCls = { good:'text-green-700', bad:'text-red-700', warn:'text-amber-700', idle:'text-slate-400' };
+
+  return (
+    <div className="mb-5">
+      <div className="flex items-baseline justify-between mb-2 flex-wrap gap-1">
+        <h3 className="text-sm font-bold text-slate-800">📊 {ko?'성과 스코어카드':'Performance scorecard'}</h3>
+        <span className="text-[11px] text-slate-500">
+          {ko?'목표':'Goals'} <strong className={metCount===KPI_GOALS.length?'text-green-600':'text-slate-700'}>{metCount}/{KPI_GOALS.length}</strong> {ko?'달성':'met'}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5">
+        {tiles.map((t, i) => (
+          <div key={i} className={`rounded-xl border p-3 ${toneCls[t.tone]}`}>
+            <div className="text-[11px] text-slate-500 flex items-center gap-1">{t.icon} {t.label}</div>
+            <div className={`text-lg font-extrabold mt-0.5 ${valCls[t.tone]}`}>{t.value}</div>
+            <div className="text-[10px] text-slate-500 leading-snug mt-0.5">{t.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {KPI_GOALS.map(g => {
+          const met = goalMet[g.id];
+          const [title, desc] = ko ? g.ko : g.en;
+          return (
+            <span key={g.id} title={desc}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold border
+                ${met ? 'bg-green-50 border-green-300 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+              <span>{met ? '✅' : g.icon}</span>{title}
+              {g.id === 'ctrl' && <span className="opacity-70">{ctrlHit}/{CONTROLS.length}</span>}
+              {g.id === 'run'  && <span className="opacity-70">{modulesDone}/5</span>}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const ROLE_TILES = [
   { tab:'master', icon:'🗂️', cls:'border-emerald-200 bg-emerald-50 hover:border-emerald-400', title:{ko:'마스터',en:'Master'},          sap:'마스터·BOM', desc:{ko:'자재·BOM·표준원가를 등록·관리해요',en:'Register materials, BOM, standard cost'} },
   { tab:'mm',     icon:'🛒', cls:'border-blue-200 bg-blue-50 hover:border-blue-400',         title:{ko:'구매 (사오기)',en:'Buy'},        sap:'구매·MM',   desc:{ko:'발주 → 입고 → 송장 → 지급',en:'PO → receipt → invoice → pay'} },
@@ -5793,6 +5923,8 @@ function App() {
       <main className="flex-1 min-w-0 py-5 relative">
         {!unlocked && <LandingHero lang={lang} onFocusPin={() => focusPin(0)} />}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
+        {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
+          <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} />}
         {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
         {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
           ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />}

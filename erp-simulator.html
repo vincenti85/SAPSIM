@@ -122,49 +122,119 @@ const APP_PIN = '__APP_PIN__';
 /* =========================================================================
    DEFAULT MASTER DATA
    ========================================================================= */
-const DEFAULT_MATERIALS = [
-  { MaterialCode:'FG001', Description:'Engine Mount Bracket', MaterialType:'FG', StandardPrice:'45.00', UOM:'EA', BOMLevel:'0', ParentMaterial:'',        Quantity:'' },
-  { MaterialCode:'SF001', Description:'Bracket Frame',        MaterialType:'SF', StandardPrice:'18.00', UOM:'EA', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'1' },
-  { MaterialCode:'RM001',  Description:'Aluminum Sheet',       MaterialType:'RM',  StandardPrice:'5.50',  UOM:'KG', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'3' },
-  { MaterialCode:'RM002',  Description:'Steel Rod',            MaterialType:'RM',  StandardPrice:'3.20',  UOM:'KG', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'1' },
-  { MaterialCode:'RM001',  Description:'Aluminum Sheet',       MaterialType:'RM',  StandardPrice:'5.50',  UOM:'KG', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'0.5' },
+/* =========================================================================
+   SCENARIO PRESETS — the same two-level make-to-stock process re-cast in
+   three industries, so a class can run the cycle more than once without
+   rehearsing identical numbers.
+
+   Material codes (FG001 / SF001 / RM001 / RM002) are structural identifiers
+   the costing engine keys on, so they stay fixed across presets; what varies
+   is the industry, company, trading partners, descriptions, standard prices,
+   quantities and rates. Each preset is tuned to a different variance story:
+   auto = large unfavourable production variance, coffee = near-standard with
+   a favourable purchase variance, electronics = an unfavourable purchase
+   variance, which is the case the auto scenario never shows.
+   ========================================================================= */
+const SCENARIOS = [
+  {
+    id:'auto', icon:'🚗',
+    ko:'자동차부품 제조', en:'Auto parts manufacturing',
+    descKo:'알루미늄 시트를 사서 브래킷 프레임을 거쳐 엔진 마운트 브래킷을 만듭니다. 생산차이가 크게 불리하게 나오는 사례입니다.',
+    descEn:'Buy aluminium sheet, build a bracket frame, then an engine mount bracket. A case with a large unfavourable production variance.',
+    company:{ code:'US01', name:'ABC Auto Parts Inc.', plant:'P001', plantName:'Alabama Manufacturing Plant' },
+    vendor:{ code:'V001', name:'Summit Aluminum Supply' },
+    customer:{ code:'C001', name:'Northstar Motors Inc.' },
+    materials:[
+      { MaterialCode:'FG001', Description:'Engine Mount Bracket', MaterialType:'FG', StandardPrice:'45.00', UOM:'EA', BOMLevel:'0', ParentMaterial:'',      Quantity:'' },
+      { MaterialCode:'SF001', Description:'Bracket Frame',        MaterialType:'SF', StandardPrice:'18.00', UOM:'EA', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'1' },
+      { MaterialCode:'RM001', Description:'Aluminum Sheet',       MaterialType:'RM', StandardPrice:'5.50',  UOM:'KG', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'3' },
+      { MaterialCode:'RM002', Description:'Steel Rod',            MaterialType:'RM', StandardPrice:'3.20',  UOM:'KG', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'1' },
+      { MaterialCode:'RM001', Description:'Aluminum Sheet',       MaterialType:'RM', StandardPrice:'5.50',  UOM:'KG', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'0.5' },
+    ],
+    params:{
+      mm:[ { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' },
+           { matCode:'RM002', qty:20,  poPrice:3.20, stdPrice:3.20, vendor:'V001' } ],
+      pp:[ { outCode:'SF001', outQty:20, scrapPct:0,
+             components:[ { code:'RM001', consumQty:60 }, { code:'RM002', consumQty:20 } ],
+             laborHr:20, laborRate:14.675, machineHr:10, machineRate:14.00, ohRate:0 },
+           { outCode:'FG001', outQty:10, scrapPct:0,
+             components:[ { code:'SF001', consumQty:10 }, { code:'RM001', consumQty:5 } ],
+             laborHr:5, laborRate:25, machineHr:2.5, machineRate:35, ohRate:0 } ],
+      sd:[ { matCode:'FG001', qty:5, salesPrice:150, customer:'C001' } ],
+    },
+  },
+  {
+    id:'coffee', icon:'☕',
+    ko:'커피 로스팅', en:'Coffee roasting',
+    descKo:'생두를 사서 로스팅 베이스를 만들고 1KG 리테일 팩으로 판매합니다. 표준에 근접한 생산과 유리한 구매가격차이가 나오는 사례입니다.',
+    descEn:'Buy green beans, roast a house base, sell as a 1KG retail pack. Production lands close to standard with a favourable purchase price variance.',
+    company:{ code:'US02', name:'Nordic Roastery Co.', plant:'R001', plantName:'Portland Roasting Plant' },
+    vendor:{ code:'V001', name:'Highland Green Coffee' },
+    customer:{ code:'C001', name:'Metro Cafe Group' },
+    materials:[
+      { MaterialCode:'FG001', Description:'Signature Blend 1KG Pack', MaterialType:'FG', StandardPrice:'13.50', UOM:'EA', BOMLevel:'0', ParentMaterial:'',      Quantity:'' },
+      { MaterialCode:'SF001', Description:'Roasted House Base',       MaterialType:'SF', StandardPrice:'12.00', UOM:'KG', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'1' },
+      { MaterialCode:'RM001', Description:'Green Arabica Bean',       MaterialType:'RM', StandardPrice:'8.20',  UOM:'KG', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'1' },
+      { MaterialCode:'RM002', Description:'Green Robusta Bean',       MaterialType:'RM', StandardPrice:'4.50',  UOM:'KG', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'0.25' },
+      { MaterialCode:'RM001', Description:'Green Arabica Bean',       MaterialType:'RM', StandardPrice:'8.20',  UOM:'KG', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'0.05' },
+    ],
+    params:{
+      mm:[ { matCode:'RM001', qty:150, poPrice:7.80, stdPrice:8.20, vendor:'V001' },
+           { matCode:'RM002', qty:40,  poPrice:4.50, stdPrice:4.50, vendor:'V001' } ],
+      pp:[ { outCode:'SF001', outQty:100, scrapPct:0,
+             components:[ { code:'RM001', consumQty:100 }, { code:'RM002', consumQty:25 } ],
+             laborHr:6, laborRate:21, machineHr:4, machineRate:19, ohRate:0 },
+           { outCode:'FG001', outQty:90, scrapPct:0,
+             components:[ { code:'SF001', consumQty:90 }, { code:'RM001', consumQty:4.5 } ],
+             laborHr:3, laborRate:18, machineHr:2, machineRate:15, ohRate:0 } ],
+      sd:[ { matCode:'FG001', qty:40, salesPrice:24.00, customer:'C001' } ],
+    },
+  },
+  {
+    id:'electronics', icon:'💡',
+    ko:'LED 조명 조립', en:'LED lighting assembly',
+    descKo:'PCB와 LED 칩을 사서 드라이버 보드를 만들고 패널 조명으로 조립합니다. 구매가격차이가 불리하게 나오는 사례로, 자동차 사례와 부호가 반대입니다.',
+    descEn:'Buy PCB blanks and LED chips, build a driver board, assemble a panel light. Here the purchase price variance is unfavourable — the opposite sign to the auto case.',
+    company:{ code:'US03', name:'Lumina Electronics Inc.', plant:'E001', plantName:'Austin Assembly Plant' },
+    vendor:{ code:'V001', name:'Pacific Board Supply' },
+    customer:{ code:'C001', name:'BrightHome Retail' },
+    materials:[
+      { MaterialCode:'FG001', Description:'LED Panel Light 40W',   MaterialType:'FG', StandardPrice:'36.00', UOM:'EA', BOMLevel:'0', ParentMaterial:'',      Quantity:'' },
+      { MaterialCode:'SF001', Description:'Driver Board Assembly', MaterialType:'SF', StandardPrice:'21.00', UOM:'EA', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'1' },
+      { MaterialCode:'RM001', Description:'PCB Blank',             MaterialType:'RM', StandardPrice:'4.20',  UOM:'EA', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'1' },
+      { MaterialCode:'RM002', Description:'LED Chip Set',          MaterialType:'RM', StandardPrice:'6.80',  UOM:'EA', BOMLevel:'2', ParentMaterial:'SF001', Quantity:'2' },
+      { MaterialCode:'RM002', Description:'LED Chip Set',          MaterialType:'RM', StandardPrice:'6.80',  UOM:'EA', BOMLevel:'1', ParentMaterial:'FG001', Quantity:'1' },
+    ],
+    params:{
+      mm:[ { matCode:'RM001', qty:60,  poPrice:4.50, stdPrice:4.20, vendor:'V001' },
+           { matCode:'RM002', qty:150, poPrice:6.80, stdPrice:6.80, vendor:'V001' } ],
+      pp:[ { outCode:'SF001', outQty:50, scrapPct:0,
+             components:[ { code:'RM001', consumQty:50 }, { code:'RM002', consumQty:100 } ],
+             laborHr:10, laborRate:26, machineHr:5, machineRate:30, ohRate:0 },
+           { outCode:'FG001', outQty:40, scrapPct:0,
+             components:[ { code:'SF001', consumQty:40 }, { code:'RM002', consumQty:40 } ],
+             laborHr:6, laborRate:28, machineHr:4, machineRate:32, ohRate:0 } ],
+      sd:[ { matCode:'FG001', qty:20, salesPrice:58.00, customer:'C001' } ],
+    },
+  },
 ];
+const scenarioById = (id) => SCENARIOS.find(s => s.id === id) || SCENARIOS[0];
+// Deep copy on apply so editing simulator values never mutates a preset.
+const cloneScenarioData = (sc) => ({
+  materials: sc.materials.map(m => ({ ...m })),
+  params: {
+    mm: sc.params.mm.map(r => ({ ...r })),
+    pp: sc.params.pp.map(o => ({ ...o, components: o.components.map(c => ({ ...c })) })),
+    sd: sc.params.sd.map(r => ({ ...r })),
+  },
+});
 
-const DEFAULT_PARAMS = {
-  mm: [
-    { matCode:'RM001', qty:100, poPrice:5.00, stdPrice:5.50, vendor:'V001' },
-    { matCode:'RM002', qty:20,  poPrice:3.20, stdPrice:3.20, vendor:'V001' },
-  ],
-  pp: [
-    {
-      outCode:'SF001', outQty:20, scrapPct:0,
-      components:[
-        { code:'RM001', consumQty:60 },
-        { code:'RM002', consumQty:20 },
-      ],
-      laborHr:20, laborRate:14.675,
-      machineHr:10, machineRate:14.00,
-      ohRate:0,
-    },
-    {
-      outCode:'FG001', outQty:10, scrapPct:0,
-      components:[
-        { code:'SF001', consumQty:10 },
-        { code:'RM001', consumQty:5 },
-      ],
-      laborHr:5, laborRate:25,
-      machineHr:2.5, machineRate:35,
-      ohRate:0,
-    },
-  ],
-  sd: [
-    { matCode:'FG001', qty:5, salesPrice:150, customer:'C001' },
-  ],
-};
+const DEFAULT_MATERIALS = cloneScenarioData(SCENARIOS[0]).materials;
+const DEFAULT_PARAMS    = cloneScenarioData(SCENARIOS[0]).params;
 
-const COMPANY = { code:'US01', name:'ABC Auto Parts Inc.', plant:'P001', plantName:'Alabama Manufacturing Plant' };
-const VENDOR   = { code:'V001', name:'Summit Aluminum Supply' };
-const CUSTOMER = { code:'C001', name:'Northstar Motors Inc.' };
+const COMPANY = SCENARIOS[0].company;
+const VENDOR   = SCENARIOS[0].vendor;
+const CUSTOMER = SCENARIOS[0].customer;
 
 const REQUIRED_CSV_COLS = ['MaterialCode','Description','MaterialType','StandardPrice','UOM','BOMLevel','ParentMaterial','Quantity'];
 
@@ -568,6 +638,13 @@ function stdOf(mats, code) {
   const m = mats.find(r => r.MaterialCode === code);
   return m ? parseFloat(m.StandardPrice) : 0;
 }
+/* Unit of measure from the material master. Journal text used to guess the
+   unit from the code prefix ("RM…" ⇒ KG), which only held for the auto-parts
+   case — a PCB blank counted in EA would read as "60KG". */
+function uomOf(mats, code) {
+  const m = mats.find(r => r.MaterialCode === code);
+  return m && m.UOM ? m.UOM : 'EA';
+}
 
 function buildJournals(p, mats, lang) {
   // ── MM helpers ──
@@ -580,6 +657,7 @@ function buildJournals(p, mats, lang) {
   const mmGRIR       = +(mmQty * mmPO).toFixed(2);
   const mmPPV        = +(mmQty * (mmStd - mmPO)).toFixed(2);
   const mmVendor     = mm.vendor || 'V001';
+  const mmUom        = uomOf(mats, mm.matCode);
   // RM002 purchase helpers (for PP GI journal amounts)
   const mm2Std = mm2.stdPrice;
 
@@ -648,13 +726,13 @@ function buildJournals(p, mats, lang) {
     },
     ck11n_h: {
       ko: { tcode:'CK11N', title:'SF001 표준원가 계산', lines:[
-        ...hCompLines.map(c => ({ account:`재료비: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        ...hCompLines.map(c => ({ account:`재료비: ${c.code} ${c.qty}${uomOf(mats, c.code)} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
         { account:`노무비: CC001 ${ppH.laborHr}h × $${ppH.laborRate}/h = $${hLabor.toFixed(2)}` },
         { account:`기계비: CC001 ${ppH.machineHr}h × $${ppH.machineRate}/h = $${hMachine.toFixed(2)}` },
         { account:`합계(계산가): $${(+hGI + hActivity).toFixed(2)}` },
       ], note:`현재 표준가 $${hStd.toFixed(2)} vs 계산가 $${(hGI + hActivity).toFixed(2)}` },
       en: { tcode:'CK11N', title:'Calculate SF001 Standard Cost', lines:[
-        ...hCompLines.map(c => ({ account:`Material: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        ...hCompLines.map(c => ({ account:`Material: ${c.code} ${c.qty}${uomOf(mats, c.code)} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
         { account:`Labor: CC001 ${ppH.laborHr}h × $${ppH.laborRate}/h = $${hLabor.toFixed(2)}` },
         { account:`Machine: CC001 ${ppH.machineHr}h × $${ppH.machineRate}/h = $${hMachine.toFixed(2)}` },
         { account:`Total (calculated): $${(hGI + hActivity).toFixed(2)}` },
@@ -672,13 +750,13 @@ function buildJournals(p, mats, lang) {
     },
     ck11n_f: {
       ko: { tcode:'CK11N', title:'FG001 표준원가 계산', lines:[
-        ...fCompLines.map(c => ({ account:`재료비: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        ...fCompLines.map(c => ({ account:`재료비: ${c.code} ${c.qty}${uomOf(mats, c.code)} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
         { account:`노무비: CC002 ${ppF.laborHr}h × $${ppF.laborRate}/h = $${fLabor.toFixed(2)}` },
         { account:`기계비: CC002 ${ppF.machineHr}h × $${ppF.machineRate}/h = $${fMachine.toFixed(2)}` },
         { account:`합계(계산가): $${(fGI + fActivity).toFixed(2)}` },
       ], note:'하위 레벨(SF001) 표준원가 릴리즈 후 상위 레벨(FG001) 계산.' },
       en: { tcode:'CK11N', title:'Calculate FG001 Standard Cost', lines:[
-        ...fCompLines.map(c => ({ account:`Material: ${c.code} ${c.qty}${c.code.startsWith('R')?'KG':'EA'} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
+        ...fCompLines.map(c => ({ account:`Material: ${c.code} ${c.qty}${uomOf(mats, c.code)} × $${c.std.toFixed(2)} = $${c.amt.toFixed(2)}` })),
         { account:`Labor: CC002 ${ppF.laborHr}h × $${ppF.laborRate}/h = $${fLabor.toFixed(2)}` },
         { account:`Machine: CC002 ${ppF.machineHr}h × $${ppF.machineRate}/h = $${fMachine.toFixed(2)}` },
         { account:`Total (calculated): $${(fGI + fActivity).toFixed(2)}` },
@@ -697,10 +775,10 @@ function buildJournals(p, mats, lang) {
 
     me21n: {
       ko: { tcode:'ME21N', title:'구매오더 생성', lines:[
-        { account:`${mm.matCode} ${mmQty}KG × $${mmPO.toFixed(2)}/KG = $${mmGRIR.toFixed(2)} PO 금액` },
+        { account:`${mm.matCode} ${mmQty}${mmUom} × $${mmPO.toFixed(2)}/${mmUom} = $${mmGRIR.toFixed(2)} PO 금액` },
       ], note:'PO 생성: 분개 없음, Commitment 기록만' },
       en: { tcode:'ME21N', title:'Create Purchase Order', lines:[
-        { account:`${mm.matCode} ${mmQty}KG × $${mmPO.toFixed(2)}/KG = $${mmGRIR.toFixed(2)} PO value` },
+        { account:`${mm.matCode} ${mmQty}${mmUom} × $${mmPO.toFixed(2)}/${mmUom} = $${mmGRIR.toFixed(2)} PO value` },
       ], note:'PO created: no journal entry, Commitment record only.' },
     },
     migo_gr: {
@@ -708,12 +786,12 @@ function buildJournals(p, mats, lang) {
         { type:'Dr', account:`원재료 ${mm.matCode} (재고)`, amount:mmInventory },
         { type:'Cr', account:'GR/IR (입고미착)', amount:mmGRIR },
         ...(mmPPV !== 0 ? [{ type:'Cr', account:`구매가격차이 (PPV, ${mmPPV > 0 ? '유리' : '불리'})`, amount:Math.abs(mmPPV) }] : []),
-      ], note:`${mmQty}KG × $${mmStd.toFixed(2)} 표준가로 재고 평가. 발주가 $${mmPO.toFixed(2)} → $${Math.abs(mmPPV).toFixed(2)} ${mmPPV >= 0 ? '유리' : '불리'} 차이` },
+      ], note:`${mmQty}${mmUom} × $${mmStd.toFixed(2)} 표준가로 재고 평가. 발주가 $${mmPO.toFixed(2)} → $${Math.abs(mmPPV).toFixed(2)} ${mmPPV >= 0 ? '유리' : '불리'} 차이` },
       en: { tcode:'MIGO', title:'Goods Receipt (Movement 101)', lines:[
         { type:'Dr', account:`Raw Material ${mm.matCode} (Inventory)`, amount:mmInventory },
         { type:'Cr', account:'GR/IR Clearing', amount:mmGRIR },
         ...(mmPPV !== 0 ? [{ type:'Cr', account:`Purchase Price Variance (PPV, ${mmPPV >= 0 ? 'Favorable' : 'Unfavorable'})`, amount:Math.abs(mmPPV) }] : []),
-      ], note:`${mmQty}KG × $${mmStd.toFixed(2)} std price. PO price $${mmPO.toFixed(2)} → $${Math.abs(mmPPV).toFixed(2)} ${mmPPV >= 0 ? 'favorable' : 'unfavorable'} variance.` },
+      ], note:`${mmQty}${mmUom} × $${mmStd.toFixed(2)} std price. PO price $${mmPO.toFixed(2)} → $${Math.abs(mmPPV).toFixed(2)} ${mmPPV >= 0 ? 'favorable' : 'unfavorable'} variance.` },
     },
     miro: {
       ko: { tcode:'MIRO', title:'송장 검증 (Invoice Receipt)', lines:[
@@ -737,20 +815,20 @@ function buildJournals(p, mats, lang) {
     },
     me21n_ret: {
       ko: { tcode:'ME21N', title:'반품 PO 생성', lines:[
-        { account:`반품 PO: ${mm.matCode} 20KG 반품 예정` }
+        { account:`반품 PO: ${mm.matCode} 20${mmUom} 반품 예정` }
       ], note:'이동유형 122를 사용하여 공급업체에 자재를 반환합니다.' },
       en: { tcode:'ME21N', title:'Create Return PO', lines:[
-        { account:`Return PO: ${mm.matCode} 20KG scheduled for return` }
+        { account:`Return PO: ${mm.matCode} 20${mmUom} scheduled for return` }
       ], note:'Use movement type 122 to return materials to vendor.' },
     },
     migo_ret: {
       ko: { tcode:'MIGO', title:'공급업체 반품 (122)', lines:[
-        { type:'Cr', account:`원재료 ${mm.matCode} (20KG × $${mmStd.toFixed(2)})`, amount:+(20*mmStd).toFixed(2) },
+        { type:'Cr', account:`원재료 ${mm.matCode} (20${mmUom} × $${mmStd.toFixed(2)})`, amount:+(20*mmStd).toFixed(2) },
         { type:'Dr', account:'GR/IR (환급 예정)', amount:+(20*mmPO).toFixed(2) },
         { type:'Dr', account:'구매가격차이 (PPV)', amount:+(20*(mmStd-mmPO)).toFixed(2) },
       ], note:'이동유형 122: 입고(101)의 반대 처리. 재고 감소, GRIR 재생성.' },
       en: { tcode:'MIGO', title:'Vendor Return (Movement 122)', lines:[
-        { type:'Cr', account:`Raw Material ${mm.matCode} (20KG × $${mmStd.toFixed(2)})`, amount:+(20*mmStd).toFixed(2) },
+        { type:'Cr', account:`Raw Material ${mm.matCode} (20${mmUom} × $${mmStd.toFixed(2)})`, amount:+(20*mmStd).toFixed(2) },
         { type:'Dr', account:'GR/IR Clearing (credit expected)', amount:+(20*mmPO).toFixed(2) },
         { type:'Dr', account:'Purchase Price Variance (PPV)', amount:+(20*(mmStd-mmPO)).toFixed(2) },
       ], note:'Movement 122: Reversal of GR (101). Inventory decreases, GRIR re-created.' },
@@ -765,21 +843,21 @@ function buildJournals(p, mats, lang) {
     },
     mi04: {
       ko: { tcode:'MI04', title:'실사 수량 입력', lines:[
-        { account:`장부수량: ${mmQty} KG / 실사수량: ${mmQty-2} KG / 차이: -2 KG` }
+        { account:`장부수량: ${mmQty} ${mmUom} / 실사수량: ${mmQty-2} ${mmUom} / 차이: -2 ${mmUom}` }
       ], note:'실사 수량과 장부 수량 차이를 기록합니다.' },
       en: { tcode:'MI04', title:'Enter Inventory Count', lines:[
-        { account:`Book qty: ${mmQty} KG / Counted qty: ${mmQty-2} KG / Difference: -2 KG` }
+        { account:`Book qty: ${mmQty} ${mmUom} / Counted qty: ${mmQty-2} ${mmUom} / Difference: -2 ${mmUom}` }
       ], note:'Record the difference between physical count and book quantity.' },
     },
     mi07: {
       ko: { tcode:'MI07', title:'실사 차이 전기', lines:[
         { type:'Dr', account:'재고감모손실 (Inventory Loss)', amount:+(2*mmStd).toFixed(2) },
-        { type:'Cr', account:`원재료 ${mm.matCode} (2KG × $${mmStd.toFixed(2)})`, amount:+(2*mmStd).toFixed(2) },
-      ], note:`장부 vs 실물 차이 2KG × $${mmStd.toFixed(2)} = $${(2*mmStd).toFixed(2)} 감모손실 계상.` },
+        { type:'Cr', account:`원재료 ${mm.matCode} (2${mmUom} × $${mmStd.toFixed(2)})`, amount:+(2*mmStd).toFixed(2) },
+      ], note:`장부 vs 실물 차이 2${mmUom} × $${mmStd.toFixed(2)} = $${(2*mmStd).toFixed(2)} 감모손실 계상.` },
       en: { tcode:'MI07', title:'Post Inventory Difference', lines:[
         { type:'Dr', account:'Inventory Loss (Shortage)', amount:+(2*mmStd).toFixed(2) },
-        { type:'Cr', account:`Raw Material ${mm.matCode} (2KG × $${mmStd.toFixed(2)})`, amount:+(2*mmStd).toFixed(2) },
-      ], note:`2KG × $${mmStd.toFixed(2)} = $${(2*mmStd).toFixed(2)} inventory loss posted for book vs. physical difference.` },
+        { type:'Cr', account:`Raw Material ${mm.matCode} (2${mmUom} × $${mmStd.toFixed(2)})`, amount:+(2*mmStd).toFixed(2) },
+      ], note:`2${mmUom} × $${mmStd.toFixed(2)} = $${(2*mmStd).toFixed(2)} inventory loss posted for book vs. physical difference.` },
     },
 
     co01_h: {
@@ -789,11 +867,11 @@ function buildJournals(p, mats, lang) {
     gi_h: {
       ko: { tcode:'MIGO', title:'원재료 출고 (261) → WIP', lines:[
         { type:'Dr', account:'WIP 재공품 (자재투입)', amount:hGI },
-        ...hCompLines.map(c => ({ type:'Cr', account:`원재료 ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+        ...hCompLines.map(c => ({ type:'Cr', account:`원재료 ${c.code} (${c.qty}${uomOf(mats, c.code)}×$${c.std.toFixed(2)})`, amount:c.amt })),
       ], note:`BOM 표준 소요량 기준 출고: $${hGI.toFixed(2)}` },
       en: { tcode:'MIGO', title:'Goods Issue (261) → WIP', lines:[
         { type:'Dr', account:'WIP (material input)', amount:hGI },
-        ...hCompLines.map(c => ({ type:'Cr', account:`Raw Material ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+        ...hCompLines.map(c => ({ type:'Cr', account:`Raw Material ${c.code} (${c.qty}${uomOf(mats, c.code)}×$${c.std.toFixed(2)})`, amount:c.amt })),
       ], note:`Issue per BOM standard qty: total $${hGI.toFixed(2)}.` },
     },
     co11n_h: {
@@ -825,11 +903,11 @@ function buildJournals(p, mats, lang) {
     gi_f: {
       ko: { tcode:'MIGO', title:'반제품/원재료 출고 (261) → WIP', lines:[
         { type:'Dr', account:'WIP 재공품 (재공품)', amount:fGI },
-        ...fCompLines.map(c => ({ type:'Cr', account:`${c.code.startsWith('S')?'반제품':'원재료'} ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+        ...fCompLines.map(c => ({ type:'Cr', account:`${c.code.startsWith('S')?'반제품':'원재료'} ${c.code} (${c.qty}${uomOf(mats, c.code)}×$${c.std.toFixed(2)})`, amount:c.amt })),
       ], note:`완성품 BOM 투입: $${fGI.toFixed(2)}` },
       en: { tcode:'MIGO', title:'Issue Semi-Finished/Raw Materials (261) → WIP', lines:[
         { type:'Dr', account:'WIP', amount:fGI },
-        ...fCompLines.map(c => ({ type:'Cr', account:`${c.code.startsWith('S')?'Semi-Finished':'Raw Material'} ${c.code} (${c.qty}${c.code.startsWith('S')?'EA':'KG'}×$${c.std.toFixed(2)})`, amount:c.amt })),
+        ...fCompLines.map(c => ({ type:'Cr', account:`${c.code.startsWith('S')?'Semi-Finished':'Raw Material'} ${c.code} (${c.qty}${uomOf(mats, c.code)}×$${c.std.toFixed(2)})`, amount:c.amt })),
       ], note:`Finished goods BOM input: total $${fGI.toFixed(2)}.` },
     },
     co11n_f: {
@@ -3841,7 +3919,7 @@ const completionStats = (allSteps) => {
   return { rows, done, total, pct: total ? Math.round(done / total * 100) : 0,
            complete: done === total };
 };
-const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', stamp, learner }) => {
+const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', stamp, learner, company }) => {
   const ko = lang === 'ko';
   const st = completionStats(allSteps);
   const v = computeVariances(simParams, materials);
@@ -3867,7 +3945,7 @@ const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', sta
               <td className={td+' w-32 font-semibold bg-slate-100'}>{ko?'발급일시':'Issued'}</td>
               <td className={td}>{stamp}</td></tr>
           <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'실습 사례':'Case'}</td>
-              <td className={td}>{COMPANY.name} · {COMPANY.code} · {COMPANY.plant}</td>
+              <td className={td}>{company.name} · {company.code} · {company.plant}</td>
               <td className={td+' font-semibold bg-slate-100'}>{ko?'전체 진행률':'Overall progress'}</td>
               <td className={td+' font-bold'}>{st.pct}% ({st.done}/{st.total} {ko?'단계':'steps'})</td></tr>
         </tbody>
@@ -3919,7 +3997,7 @@ const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', sta
   );
 };
 
-const AuditPackage = ({ allSteps, simParams, materials, lang='ko', stamp }) => {
+const AuditPackage = ({ allSteps, simParams, materials, lang='ko', stamp, company }) => {
   const ko = lang === 'ko';
   const { entries, tbRows, totalDr, totalCr, balanced } = buildLedger(allSteps, simParams, materials, lang);
   const h = 'text-sm font-bold text-slate-900 mt-5 mb-1.5 border-b border-slate-300 pb-1';
@@ -3928,7 +4006,7 @@ const AuditPackage = ({ allSteps, simParams, materials, lang='ko', stamp }) => {
       {/* 1. Cover */}
       <h1 className="text-xl font-extrabold">{ko ? '원가 프로세스 감사 참고자료' : 'Costing Process — Audit Reference Pack'}</h1>
       <p className="text-xs text-slate-600 mt-1">
-        {COMPANY.name} · Company Code {COMPANY.code} · Plant {COMPANY.plant} ({COMPANY.plantName})
+        {company.name} · Company Code {company.code} · Plant {company.plant} ({company.plantName})
       </p>
       <p className="text-[11px] text-slate-500 mt-0.5">{ko ? '생성일시' : 'Generated'}: {stamp}</p>
       <p className="mt-3 text-[11px] leading-relaxed border border-slate-300 bg-slate-50 p-2">
@@ -5407,6 +5485,53 @@ const KPI_GOALS = [
   { id:'bal',   icon:'⚖️', ko:['장부 정합','차변 합계 = 대변 합계'],
                            en:['Books balance','Total debits equal total credits'] },
 ];
+/* Scenario picker — switching re-seeds materials and parameters and clears
+   progress, so the confirm prompt appears once work is under way. */
+const ScenarioPicker = ({ scenarioId, onApply, allSteps, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const cur = scenarioById(scenarioId);
+  const started = Object.values(allSteps).some(Boolean);
+  const choose = (id) => {
+    if (id === scenarioId) return;
+    const sc = scenarioById(id);
+    if (started && !window.confirm(ko
+      ? `실습 사례를 "${sc.ko}"로 바꾸면 지금까지 실행한 단계가 모두 초기화됩니다. 계속할까요?`
+      : `Switching to "${sc.en}" resets every step you have run so far. Continue?`)) return;
+    onApply(id);
+  };
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex items-baseline justify-between flex-wrap gap-1 mb-2">
+        <h3 className="text-sm font-bold text-slate-800">🏭 {ko?'실습 사례 선택':'Choose a case'}</h3>
+        <span className="text-[11px] text-slate-400">
+          {ko?'같은 프로세스를 다른 산업·원가 구조로 다시 실습합니다':'The same process, re-cast in another industry and cost structure'}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {SCENARIOS.map(s => {
+          const on = s.id === scenarioId;
+          return (
+            <button key={s.id} onClick={() => choose(s.id)}
+              className={`text-left rounded-lg border-2 p-2.5 transition-all
+                ${on ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-400'}`}>
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg">{s.icon}</span>
+                <span className="text-sm font-bold text-slate-800">{ko?s.ko:s.en}</span>
+                {on && <span className="ml-auto text-[10px] font-bold text-indigo-600">{ko?'실습 중':'Active'}</span>}
+              </div>
+              <p className="text-[10px] text-slate-500 leading-snug mt-1">{ko?s.descKo:s.descEn}</p>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-slate-400 mt-2">
+        {ko ? `현재 사례: ${cur.company.name} · 자재코드(FG001·SF001·RM001·RM002)는 모든 사례에서 동일하며, 자재명·단가·수량과 거래처가 바뀝니다.`
+            : `Active case: ${cur.company.name} — material codes stay the same across cases; names, prices, quantities and trading partners change.`}
+      </p>
+    </div>
+  );
+};
+
 const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko',
                         learnerName, setLearnerName, onPrintReport }) => {
   const ko = lang === 'ko';
@@ -5668,6 +5793,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('home_field');
   const [lang, setLang] = useState('ko'); // 'ko' | 'en'
   const [viewMode, setViewMode] = useState('field'); // 'field' (현업 역할별) | 'accounting' (회계 모듈별)
+  const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id);
+  const scenario = scenarioById(scenarioId);
+  const company = scenario.company, vendor = scenario.vendor, customer = scenario.customer;
   const [materials, setMaterials] = useState(DEFAULT_MATERIALS);
   const [simParams, setSimParams] = useState(DEFAULT_PARAMS);
   const [showPopup, setShowPopup] = useState(false);
@@ -5735,6 +5863,26 @@ function App() {
   // Every executed step in one lookup, for the journal ledger's document trail.
   const allSteps = { ...ckSteps, ...mmSteps, ...mmReturnSteps, ...miSteps, ...sdebSteps,
     ...ppSteps, ...ficoSteps, ...mr21Steps, ...overheadSteps, ...sdSteps, ...sdReturnSteps };
+
+  // Clear every executed step — used when switching scenarios, so figures
+  // from one case can never leak into another's ledger.
+  const clearAllSteps = () => {
+    const off = (o) => Object.fromEntries(Object.keys(o).map(k => [k, false]));
+    setCkSteps(off(ckSteps));           setMmSteps(off(mmSteps));
+    setMmReturnSteps(off(mmReturnSteps)); setMiSteps(off(miSteps));
+    setSdebSteps(off(sdebSteps));       setPpSteps(off(ppSteps));
+    setFicoSteps(off(ficoSteps));       setMr21Steps(off(mr21Steps));
+    setOverheadSteps(off(overheadSteps)); setSdSteps(off(sdSteps));
+    setSdReturnSteps(off(sdReturnSteps));
+  };
+  const applyScenario = (id) => {
+    const sc = scenarioById(id);
+    const data = cloneScenarioData(sc);
+    setScenarioId(id);
+    setMaterials(data.materials);
+    setSimParams(data.params);
+    clearAllSteps();
+  };
 
   /* ---- Snapshot: export/import the exact state behind a printed pack, so a
      reviewer can reproduce the same figures rather than take them on trust. */
@@ -6051,9 +6199,9 @@ function App() {
 
   return (
     <div id="app-shell" className={`min-h-screen ${storyMode ? 'pb-24' : ''}`}>
-      <AuditPackage allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} stamp={packStamp} />
+      <AuditPackage allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} stamp={packStamp} company={company} />
       <CompletionReport allSteps={allSteps} simParams={simParams} materials={materials} copa={copa}
-        lang={lang} stamp={certStamp} learner={learnerName} />
+        lang={lang} stamp={certStamp} learner={learnerName} company={company} />
       {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
       {storyMode && <StoryBar idx={storyIdx} setIdx={setStoryIdx} setActiveTab={setActiveTab} lang={lang}
         onExit={() => setStoryMode(false)} />}
@@ -6063,9 +6211,9 @@ function App() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-2xl">🏭</span>
             <div>
-              <h1 className="font-bold text-lg text-slate-800">ERP Process Learning Simulator — {COMPANY.name}</h1>
+              <h1 className="font-bold text-lg text-slate-800">ERP Process Learning Simulator — {company.name}</h1>
               <p className="text-xs text-slate-500">
-                Company Code {COMPANY.code} · Plant {COMPANY.plant} ({COMPANY.plantName})
+                Company Code {company.code} · Plant {company.plant} ({company.plantName})
               </p>
             </div>
             <div className="ml-auto flex max-w-full flex-row flex-wrap items-center justify-end gap-2">
@@ -6194,6 +6342,8 @@ function App() {
         {!unlocked && <LandingHero lang={lang} onFocusPin={() => focusPin(0)} />}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
         {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
+          <ScenarioPicker scenarioId={scenarioId} onApply={applyScenario} allSteps={allSteps} lang={lang} />}
+        {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
           <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang}
             learnerName={learnerName} setLearnerName={setLearnerName} onPrintReport={printCompletionReport} />}
         {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
@@ -6219,7 +6369,7 @@ function App() {
       </div>
 
       <footer className="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-slate-400">
-        ERP Process Learning Simulator (ECC-style FI/CO) · Vendor {VENDOR.code} ({VENDOR.name}) · Customer {CUSTOMER.code} ({CUSTOMER.name})
+        ERP Process Learning Simulator (ECC-style FI/CO) · Vendor {vendor.code} ({vendor.name}) · Customer {customer.code} ({customer.name})
         <br/>{T[lang].footerFlow}
         <br/>
         <span className="block mt-2 text-[10px] text-slate-400 leading-relaxed">

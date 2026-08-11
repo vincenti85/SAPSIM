@@ -5026,18 +5026,137 @@ const DryrunTab = ({ lang }) => {
 /* =========================================================================
    TAB 8: CO-PA DETAILED PROFITABILITY ANALYSIS
    ========================================================================= */
-const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
+/* =========================================================================
+   WHAT-IF LEVERS — turn the fixed scenario into a decision the learner can
+   make. Each slider edits one simulation parameter, and because the journal
+   engine and CO-PA both derive from those parameters, the consequence shows
+   up immediately in the analysis below.
+
+   Deliberately four levers, one per decision owner (buy / sell / make /
+   labour), rather than exposing every field: the point is to feel the
+   causal chain, not to fill in a form.
+   ========================================================================= */
+const WhatIfPanel = ({ simParams, materials, setSimParams, scenarioId, lang='ko' }) => {
+  const ko = lang === 'ko';
+  const v = computeVariances(simParams, materials);
+  const base = useMemo(() => cloneScenarioData(scenarioById(scenarioId)).params, [scenarioId]);
+
+  const mm0 = simParams.mm[0] || {}, sd0 = simParams.sd[0] || {};
+  const ppFIdx = Math.max(0, simParams.pp.findIndex(o => o.outCode === 'FG001'));
+  const ppF = simParams.pp[ppFIdx] || {};
+
+  const setMm = (patch) => setSimParams(p => ({ ...p, mm: p.mm.map((r, i) => i === 0 ? { ...r, ...patch } : r) }));
+  const setSd = (patch) => setSimParams(p => ({ ...p, sd: p.sd.map((r, i) => i === 0 ? { ...r, ...patch } : r) }));
+  const setPpF = (patch) => setSimParams(p => ({ ...p, pp: p.pp.map((o, i) => i === ppFIdx ? { ...o, ...patch } : o) }));
+  const reset = () => setSimParams(cloneScenarioData(scenarioById(scenarioId)).params);
+
+  const levers = [
+    { id:'po',    icon:'🛒', ko:'발주 단가', en:'Purchase price',
+      value:Number(mm0.poPrice) || 0, baseVal:Number(base.mm[0].poPrice) || 0,
+      min:+(base.mm[0].poPrice * 0.5).toFixed(2), max:+(base.mm[0].poPrice * 1.5).toFixed(2), step:0.05, unit:'$',
+      hintKo:'표준가보다 싸게 사면 구매가격차이가 유리해집니다', hintEn:'Buying below standard makes the purchase variance favourable',
+      onChange:(x)=>setMm({ poPrice:x }) },
+    { id:'sale',  icon:'💵', ko:'판매 단가', en:'Sales price',
+      value:Number(sd0.salesPrice) || 0, baseVal:Number(base.sd[0].salesPrice) || 0,
+      min:+(base.sd[0].salesPrice * 0.5).toFixed(2), max:+(base.sd[0].salesPrice * 1.5).toFixed(2), step:0.5, unit:'$',
+      hintKo:'매출과 마진에 직접 영향을 줍니다', hintEn:'Drives revenue and margin directly',
+      onChange:(x)=>setSd({ salesPrice:x }) },
+    { id:'qty',   icon:'🏭', ko:'완제품 생산량', en:'Output quantity',
+      value:Number(ppF.outQty) || 0, baseVal:Number(base.pp[ppFIdx].outQty) || 0,
+      min:Math.max(1, Math.round(base.pp[ppFIdx].outQty * 0.5)), max:Math.round(base.pp[ppFIdx].outQty * 2), step:1, unit:'',
+      hintKo:'같은 고정 투입을 더 많은 수량이 나눠 흡수합니다', hintEn:'The same inputs are absorbed over more units',
+      onChange:(x)=>setPpF({ outQty:x }) },
+    { id:'labor', icon:'👷', ko:'노무 단가', en:'Labour rate',
+      value:Number(ppF.laborRate) || 0, baseVal:Number(base.pp[ppFIdx].laborRate) || 0,
+      min:+(base.pp[ppFIdx].laborRate * 0.5).toFixed(2), max:+(base.pp[ppFIdx].laborRate * 1.5).toFixed(2), step:0.25, unit:'$',
+      hintKo:'가공비가 오르면 생산차이가 불리해집니다', hintEn:'A higher rate pushes the production variance unfavourable',
+      onChange:(x)=>setPpF({ laborRate:x }) },
+  ];
+
+  const money = (n) => `${n < 0 ? '−' : ''}$${Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const stdMargin = +(v.revenue - v.stdCogs).toFixed(2);
+  const marginPct = v.revenue > 0 ? (stdMargin / v.revenue * 100) : 0;
+  const dirty = levers.some(l => Math.abs(l.value - l.baseVal) > 0.001);
+
+  const out = [
+    { label: ko?'구매가격차이':'Purchase variance', val: v.ppv,
+      good: v.ppv >= 0, note: v.ppv >= 0 ? (ko?'유리':'favourable') : (ko?'불리':'unfavourable') },
+    { label: ko?'순 원가차이':'Net variance', val: v.net,
+      good: v.net <= 0, note: v.net > 0 ? (ko?'불리':'unfavourable') : (ko?'유리':'favourable') },
+    { label: ko?'표준 매출총이익':'Standard gross profit', val: stdMargin, good: stdMargin >= 0,
+      note: `${ko?'마진':'margin'} ${marginPct.toFixed(1)}%` },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-baseline justify-between flex-wrap gap-1 mb-1">
+        <h3 className="text-sm font-bold text-slate-800">🎚 {ko?'What-if — 레버를 움직여 보세요':'What-if — move a lever'}</h3>
+        {dirty && (
+          <button onClick={reset} className="text-[11px] font-semibold text-indigo-600 hover:underline">
+            ↺ {ko?'시나리오 기본값으로':'Reset to scenario defaults'}
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+        {ko ? '값을 바꾸면 분개·원장·아래 수익성 분석이 즉시 다시 계산됩니다. 이미 실행한 단계도 새 값으로 다시 평가되므로, 결정이 원가에 어떻게 흘러가는지 되짚어 볼 수 있습니다.'
+            : 'Changing a value recalculates the journals, the ledger and the analysis below straight away. Steps already run are re-valued too, so you can trace how a decision flows into cost.'}
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
+        {levers.map(l => {
+          const delta = l.value - l.baseVal;
+          return (
+            <div key={l.id}>
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="font-semibold text-slate-700">{l.icon} {ko?l.ko:l.en}</span>
+                <span className="font-mono text-slate-800">
+                  {l.unit}{l.value.toLocaleString(undefined,{maximumFractionDigits:2})}
+                  {Math.abs(delta) > 0.001 && (
+                    <span className={`ml-1 text-[10px] ${delta > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ({delta > 0 ? '+' : '−'}{l.unit}{Math.abs(delta).toFixed(2)})
+                    </span>
+                  )}
+                </span>
+              </div>
+              <input type="range" min={l.min} max={l.max} step={l.step} value={l.value}
+                onChange={e => l.onChange(parseFloat(e.target.value))}
+                className="w-full accent-indigo-500 mt-0.5" />
+              <p className="text-[10px] text-slate-400 leading-snug">{ko?l.hintKo:l.hintEn}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100">
+        {out.map((o, i) => (
+          <div key={i} className={`rounded-lg border p-2.5 ${o.good ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+            <div className="text-[10px] text-slate-500">{o.label}</div>
+            <div className={`text-base font-extrabold ${o.good ? 'text-green-700' : 'text-red-700'}`}>{money(o.val)}</div>
+            <div className="text-[10px] text-slate-500">{o.note}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko', simParams, materials, copa, setSimParams, scenarioId }) => {
   const mlDone = ficoSteps.pc;
   const ke27Done = ficoSteps.ke27;
 
-  const rev       = sdSteps.vf01  ? 750    : 0;
-  const stdCOGS   = sdSteps.vl01n ? 225    : 0;
+  // Derived from the live parameters, so the what-if levers below actually
+  // move this analysis. (These figures used to be hard-coded to the
+  // auto-parts case and ignored the Variables tab entirely.)
+  const v         = computeVariances(simParams, materials);
+  const rev       = sdSteps.vf01  ? v.revenue : 0;
+  const stdCOGS   = sdSteps.vl01n ? v.stdCogs : 0;
   const stdMargin = rev - stdCOGS;
-  const mlAdj     = (mlDone && sdSteps.vl01n) ? 101.875 : 0;
+  const mlAdj     = (mlDone && sdSteps.vl01n && copa) ? +(copa.actualCOGS - v.stdCogs).toFixed(3) : 0;
   const actCOGS   = stdCOGS + mlAdj;
   const actMargin = rev - actCOGS;
-  const stdPct    = rev > 0 ? (stdMargin / rev * 100) : 70.0;
-  const actPct    = rev > 0 ? (actMargin / rev * 100) : 56.4;
+  const stdPct    = rev > 0 ? (stdMargin / rev * 100) : 0;
+  const actPct    = rev > 0 ? (actMargin / rev * 100) : 0;
+  const refRev    = v.revenue || 1;   // waterfall bars scale to full revenue
 
   // Waterfall items — bar width as % of $750
   const wf = [
@@ -5048,26 +5167,28 @@ const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
     { key:'amgn',   label: lang==='ko'?'⑤ 실제마진 (CO-PA)':'⑤ Actual Margin',   val: actMargin, color:'bg-indigo-600',type:'subtotal'},
   ];
 
-  const refVals = { rev:750, scogs:225, smgn:525, mladj:101.875, amgn:423.125 };
-
   const barW = (item) => {
-    const absVal = Math.abs(item.val);
-    if (rev === 0) {
-      const ref = { rev:100, scogs:30, smgn:70, mladj:13.6, amgn:56.4 };
-      return ref[item.key] || 0;
-    }
-    return (absVal / 750 * 100);
+    // Before billing there is nothing posted; show the scenario's own
+    // proportions rather than a fixed auto-parts silhouette.
+    const base = rev === 0 ? v.revenue : rev;
+    const val  = rev === 0
+      ? { rev:v.revenue, scogs:v.stdCogs, smgn:v.revenue - v.stdCogs,
+          mladj:Math.abs(v.net) * v.soldRatio, amgn:v.revenue - v.stdCogs - Math.abs(v.net) * v.soldRatio }[item.key]
+      : Math.abs(item.val);
+    return base > 0 ? Math.min(100, Math.abs(val) / base * 100) : 0;
   };
 
   const fmt = (v, prefix='$') => `${prefix}${Math.abs(v).toFixed(2)}`;
 
+  const planMargin = +(v.revenue - v.stdCogs).toFixed(2);
   const reportRows = [
-    { item: lang==='ko'?'매출액 (Net Revenue)':'Net Revenue',                   std:750,   act:rev,       bold:false },
-    { item: lang==='ko'?'표준매출원가 (Std COGS)':'Standard COGS',              std:-225,  act:-stdCOGS,  bold:false },
-    { item: lang==='ko'?'표준마진 (Gross Margin)':'Standard Gross Margin',       std:525,   act:stdMargin, bold:true  },
-    { item: lang==='ko'?'ML 원가조정 (Price/Eff Var)':'ML Cost Adjustment',      std:0,     act:-mlAdj,    bold:false },
-    { item: lang==='ko'?'실제마진 (Contribution Margin)':'Actual Contribution Margin', std:525, act:actMargin, bold:true },
-    { item: lang==='ko'?'마진율 (CM %)':'Contribution Margin %',                std:70,    act:actPct,    bold:false, isPct:true },
+    { item: lang==='ko'?'매출액 (Net Revenue)':'Net Revenue',                   std:v.revenue,   act:rev,       bold:false },
+    { item: lang==='ko'?'표준매출원가 (Std COGS)':'Standard COGS',              std:-v.stdCogs,  act:-stdCOGS,  bold:false },
+    { item: lang==='ko'?'표준마진 (Gross Margin)':'Standard Gross Margin',       std:planMargin,  act:stdMargin, bold:true  },
+    { item: lang==='ko'?'ML 원가조정 (Price/Eff Var)':'ML Cost Adjustment',      std:0,           act:-mlAdj,    bold:false },
+    { item: lang==='ko'?'실제마진 (Contribution Margin)':'Actual Contribution Margin', std:planMargin, act:actMargin, bold:true },
+    { item: lang==='ko'?'마진율 (CM %)':'Contribution Margin %',
+      std: v.revenue>0 ? +(planMargin/v.revenue*100).toFixed(1) : 0, act:actPct, bold:false, isPct:true },
   ];
 
   return (
@@ -5082,6 +5203,9 @@ const COPATab = ({ ficoSteps, sdSteps, ppSteps, lang='ko' }) => {
             : 'CO Module final goal — Product/Customer actual margin (Actual Posting / Profitability Report)'}
         </p>
       </div>
+
+      <WhatIfPanel simParams={simParams} materials={materials} setSimParams={setSimParams}
+        scenarioId={scenarioId} lang={lang} />
 
       {!ke27Done && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
@@ -6591,7 +6715,8 @@ function App() {
         {activeTab==='dryrun' && <DryrunTab lang={lang} />}
         {activeTab==='flow' && <FlowTab lang={lang} />}
         {activeTab==='script' && <ScriptTab lang={lang} />}
-        {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang} />}
+        {activeTab==='copa' && <COPATab ficoSteps={ficoSteps} sdSteps={sdSteps} ppSteps={ppSteps} lang={lang}
+          simParams={simParams} materials={materials} copa={copa} setSimParams={setSimParams} scenarioId={scenarioId} />}
         {activeTab==='costmodel' && <CostModelTab lang={lang} simParams={simParams} materials={materials} />}
       </main>
       </div>

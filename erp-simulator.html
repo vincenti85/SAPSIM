@@ -2270,6 +2270,164 @@ const StoryBar = ({ idx, setIdx, onExit, setActiveTab, lang }) => {
   );
 };
 
+/* =========================================================================
+   JOURNAL QUIZ — active recall instead of replay. In quiz mode the learner
+   posts the entry themselves (side, account, amount) before the answer is
+   revealed, which is the "실무형 채점" model Korean ERP certification uses.
+
+   Grading is a multiset match, so row order never matters, and account
+   matching goes through acctKey() to ignore the descriptive suffix the
+   journals carry ("원재료 RM001 (재고)" ⇒ "원재료 RM001").
+   ========================================================================= */
+const DISTRACTOR_ACCOUNTS = {
+  ko: ['현금 Cash','외상매입금 AP-V001','매출채권 AR-C001','매출액 Revenue','매출원가',
+       'GR/IR (입고미착)','구매가격차이 (PPV, 유리)','WIP 재공품','미지급비용','ML차이계정',
+       '생산정산차이','감가상각비','선급비용','부가세대급금'],
+  en: ['Cash','Accounts Payable AP-V001','Accounts Receivable AR-C001','Revenue','Cost of Goods Sold',
+       'GR/IR Clearing','Purchase Price Variance (PPV)','WIP','Accrued Expenses','ML Difference Acct',
+       'Production Variance','Depreciation Expense','Prepaid Expense','Input VAT'],
+};
+const quizableLines = (data) => (data && data.lines ? data.lines.filter(l => l.type && l.amount != null) : []);
+const JournalQuiz = ({ data, lang, onPass, onClose }) => {
+  const ko = lang === 'ko';
+  const answer = quizableLines(data);
+  const n = answer.length;
+
+  // Candidate accounts: the correct ones plus plausible distractors, keyed so
+  // the same GL account never appears twice, then sorted for a stable order.
+  const options = useMemo(() => {
+    const seen = new Map();
+    answer.forEach(l => seen.set(acctKey(l.account), l.account));
+    (ko ? DISTRACTOR_ACCOUNTS.ko : DISTRACTOR_ACCOUNTS.en).forEach(a => {
+      if (!seen.has(acctKey(a))) seen.set(acctKey(a), a);
+    });
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+  }, [data, lang]);
+
+  const [rows, setRows] = useState(() => answer.map(() => ({ type:'Dr', account:'', amount:'' })));
+  const [result, setResult] = useState(null);
+  const setRow = (i, patch) => setRows(rs => rs.map((r, j) => j === i ? { ...r, ...patch } : r));
+
+  const grade = () => {
+    const remaining = answer.map((l, i) => ({ i, type:l.type, key:acctKey(l.account), amt:Number(l.amount) }));
+    const marks = rows.map(r => {
+      const amt = parseFloat(r.amount);
+      if (!r.account || isNaN(amt)) return false;
+      const hit = remaining.findIndex(a => a.type === r.type && a.key === acctKey(r.account) && Math.abs(a.amt - amt) < 0.01);
+      if (hit === -1) return false;
+      remaining.splice(hit, 1);
+      return true;
+    });
+    const correct = marks.filter(Boolean).length;
+    // Balance check is reported separately — a balanced-but-wrong entry is a
+    // different mistake from an unbalanced one, and worth naming.
+    const dr = rows.reduce((s, r) => s + (r.type === 'Dr' ? (parseFloat(r.amount) || 0) : 0), 0);
+    const cr = rows.reduce((s, r) => s + (r.type === 'Cr' ? (parseFloat(r.amount) || 0) : 0), 0);
+    setResult({ marks, correct, total:n, perfect: correct === n, balanced: Math.abs(dr - cr) < 0.01, dr, cr });
+  };
+
+  const money = (v) => `$${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:3})}`;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-3 rounded-t-xl flex justify-between items-center shrink-0">
+          <span className="font-bold text-sm">✍️ {ko ? '분개 입력 — ' : 'Post the entry — '}{data.title}</span>
+          <button onClick={onClose} className="text-white/80 hover:text-white text-lg leading-none">✕</button>
+        </div>
+        <div className="px-4 py-2 text-[11px] text-slate-600 border-b border-slate-100 shrink-0 bg-amber-50">
+          💡 {ko ? '업무 상황: ' : 'Business context: '}{data.note || (ko ? '이 거래의 분개를 직접 입력해 보세요.' : 'Post this transaction yourself.')}
+        </div>
+
+        <div className="overflow-auto p-4">
+          <p className="text-[11px] text-slate-500 mb-2">
+            {ko ? `${n}개 줄로 구성된 분개입니다. 각 줄의 차변·대변, 계정, 금액을 입력하세요. 순서는 상관없습니다.`
+                : `This entry has ${n} lines. Choose the side, account and amount for each. Order does not matter.`}
+          </p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-500 text-left border-b border-slate-100">
+                <th className="py-1 w-16">{ko ? '구분' : 'Side'}</th>
+                <th className="py-1">{ko ? '계정' : 'Account'}</th>
+                <th className="py-1 w-28 text-right">{ko ? '금액' : 'Amount'}</th>
+                {result && <th className="py-1 w-10 text-center">{ko ? '채점' : ''}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className="border-b border-slate-50">
+                  <td className="py-1.5 pr-2">
+                    <select value={r.type} onChange={e => setRow(i, { type:e.target.value })} disabled={!!result}
+                      className="w-full px-1.5 py-1 rounded border border-slate-300 text-xs bg-white">
+                      <option value="Dr">Dr</option><option value="Cr">Cr</option>
+                    </select>
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <select value={r.account} onChange={e => setRow(i, { account:e.target.value })} disabled={!!result}
+                      className="w-full px-1.5 py-1 rounded border border-slate-300 text-xs bg-white">
+                      <option value="">{ko ? '— 계정 선택 —' : '— select account —'}</option>
+                      {options.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </td>
+                  <td className="py-1.5">
+                    <input type="number" step="0.01" value={r.amount} disabled={!!result}
+                      onChange={e => setRow(i, { amount:e.target.value })} placeholder="0.00"
+                      className="w-full px-1.5 py-1 rounded border border-slate-300 text-xs text-right" />
+                  </td>
+                  {result && <td className="py-1.5 text-center text-base">{result.marks[i] ? '✅' : '❌'}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {result && (
+            <div className="mt-3 space-y-2">
+              <div className={`p-2.5 rounded text-xs font-semibold ${result.perfect ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                {result.perfect
+                  ? (ko ? `정답입니다 — ${result.total}줄 모두 일치합니다.` : `Correct — all ${result.total} lines match.`)
+                  : (ko ? `${result.total}줄 중 ${result.correct}줄 일치.` : `${result.correct} of ${result.total} lines match.`)}
+                {!result.balanced && (
+                  <div className="font-normal mt-1">
+                    ⚖️ {ko ? `차변 ${money(result.dr)} ≠ 대변 ${money(result.cr)} — 복식부기는 양변이 같아야 합니다.`
+                            : `Debits ${money(result.dr)} ≠ credits ${money(result.cr)} — a double entry must balance.`}
+                  </div>
+                )}
+              </div>
+              {!result.perfect && (
+                <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1">{ko ? '정답' : 'Correct entry'}</p>
+                  {answer.map((l, i) => (
+                    <div key={i} className="flex justify-between text-[11px] py-0.5">
+                      <span><span className={`font-bold mr-1.5 ${l.type==='Dr'?'text-red-700':'text-blue-700'}`}>{l.type}</span>{l.account}</span>
+                      <span className="font-semibold">{money(l.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 py-3 border-t border-slate-100 shrink-0 flex justify-end gap-2">
+          {!result ? (
+            <>
+              <button onClick={onClose} className="px-3 py-1.5 rounded text-xs text-slate-600 hover:bg-slate-100">
+                {ko ? '취소' : 'Cancel'}
+              </button>
+              <button onClick={grade} className="px-4 py-1.5 rounded bg-purple-600 text-white text-xs font-bold hover:bg-purple-700">
+                {ko ? '채점하기' : 'Check answer'}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => onPass(result)} className="px-4 py-1.5 rounded bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700">
+              {ko ? '확인하고 다음 단계로 →' : 'Continue →'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const JournalPopup = ({ data, onClose }) => {
   if (!data) return null;
   return (
@@ -2302,7 +2460,13 @@ const JournalPopup = ({ data, onClose }) => {
 /* =========================================================================
    STEP BUTTON
    ========================================================================= */
+/* Quiz mode reaches StepButton through context rather than props: there are
+   ~40 call sites across the tabs, and threading two more props through every
+   one of them would bury the change in noise. */
+const QuizCtx = React.createContext({ quizMode:false, openQuiz:null });
+
 const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData, onExecute, onCancel, openPopup, disabled=false, lang='ko' }) => {
+  const { quizMode, openQuiz } = React.useContext(QuizCtx);
   const colors = {
     blue:'bg-blue-500 hover:bg-blue-600', orange:'bg-orange-500 hover:bg-orange-600',
     indigo:'bg-indigo-500 hover:bg-indigo-600', teal:'bg-teal-500 hover:bg-teal-600',
@@ -2320,11 +2484,21 @@ const StepButton = ({ steps, setSteps, stepKey, label, color='blue', journalData
       🛡 {ctrls.map(c => c.id).join(', ')}
     </span>
   );
+  const commit = () => {
+    setSteps(prev => ({ ...prev, [stepKey]: true }));
+    onExecute?.();
+  };
   const execute = () => {
     if (disabled) return;
-    setSteps(prev => ({ ...prev, [stepKey]: true }));
+    // In quiz mode the learner posts the entry first; steps with no Dr/Cr
+    // lines (order creation, report views) have nothing to grade and run as
+    // usual so the flow is not interrupted by empty quizzes.
+    if (quizMode && openQuiz && quizableLines(journalData).length > 0) {
+      openQuiz(journalData, commit);
+      return;
+    }
+    commit();
     if (journalData) openPopup(journalData);
-    onExecute?.();
   };
   const cancel = () => {
     const keys = Object.keys(steps);
@@ -3919,7 +4093,7 @@ const completionStats = (allSteps) => {
   return { rows, done, total, pct: total ? Math.round(done / total * 100) : 0,
            complete: done === total };
 };
-const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', stamp, learner, company }) => {
+const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', stamp, learner, company, quizStats }) => {
   const ko = lang === 'ko';
   const st = completionStats(allSteps);
   const v = computeVariances(simParams, materials);
@@ -3976,6 +4150,12 @@ const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', sta
               <td className={td+' font-semibold bg-slate-100 w-48'}>{ko?'장부 정합성':'Books balance'}</td><td className={td}>{balanced ? (ko?'차변 = 대변':'Debits = Credits') : (ko?'불일치':'Out of balance')}</td></tr>
           <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'매출액':'Revenue'}</td><td className={td}>{money(rev)}</td>
               <td className={td+' font-semibold bg-slate-100'}>{ko?'매출원가':'COGS'}</td><td className={td}>{money(cogs)}{closed?(ko?' (실제원가 반영)':' (actual)'):(ko?' (표준)':' (standard)')}</td></tr>
+          {quizStats && quizStats.attempted > 0 && (
+            <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'분개 채점':'Journal quiz'}</td>
+                <td className={td}>{ko?'전량 정답':'Perfect'} {quizStats.perfect}/{quizStats.attempted}</td>
+                <td className={td+' font-semibold bg-slate-100'}>{ko?'줄 정확도':'Line accuracy'}</td>
+                <td className={td}>{quizStats.rows ? Math.round(quizStats.correctRows/quizStats.rows*100) : 0}% ({quizStats.correctRows}/{quizStats.rows})</td></tr>
+          )}
           <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'순 원가차이':'Net variance'}</td>
               <td className={td}>{(allSteps.ko88_h||allSteps.ko88_f) ? `${money(Math.abs(v.net))} ${v.net>0?(ko?'불리':'unfav.'):(ko?'유리':'fav.')}` : '—'}</td>
               <td className={td+' font-semibold bg-slate-100'}>{ko?'작동한 통제':'Controls exercised'}</td><td className={td}>{ctrls.length} / {CONTROLS.length}</td></tr>
@@ -5533,7 +5713,7 @@ const ScenarioPicker = ({ scenarioId, onApply, allSteps, lang='ko' }) => {
 };
 
 const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko',
-                        learnerName, setLearnerName, onPrintReport }) => {
+                        learnerName, setLearnerName, onPrintReport, quizStats }) => {
   const ko = lang === 'ko';
   const v = computeVariances(simParams, materials);
   const closed = !!allSteps.pc;
@@ -5627,6 +5807,21 @@ const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko',
           );
         })}
       </div>
+
+      {/* Quiz results, shown only once the learner has attempted one */}
+      {quizStats && quizStats.attempted > 0 && (
+        <div className="mt-2.5 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span className="font-semibold text-purple-800">✍️ {ko ? '분개 채점' : 'Journal quiz'}</span>
+          <span className="text-slate-700">
+            {ko ? '전량 정답' : 'Perfect entries'} <strong>{quizStats.perfect}/{quizStats.attempted}</strong>
+          </span>
+          <span className="text-slate-700">
+            {ko ? '줄 정확도' : 'Line accuracy'}{' '}
+            <strong>{quizStats.rows ? Math.round(quizStats.correctRows / quizStats.rows * 100) : 0}%</strong>
+            <span className="text-slate-400"> ({quizStats.correctRows}/{quizStats.rows})</span>
+          </span>
+        </div>
+      )}
 
       {/* Completion report — issued from whatever has actually been run */}
       {onPrintReport && (() => {
@@ -5929,6 +6124,22 @@ function App() {
     reader.readAsText(file);
   };
 
+  /* ---- Quiz mode: post the entry yourself, then get graded ---- */
+  const [quizMode, setQuizMode] = useState(false);
+  const [quiz, setQuiz] = useState(null);            // { data, onPass }
+  const [quizStats, setQuizStats] = useState({ attempted:0, perfect:0, rows:0, correctRows:0 });
+  const openQuiz = (data, onCommit) => setQuiz({ data, onCommit });
+  const finishQuiz = (result) => {
+    setQuizStats(s => ({
+      attempted: s.attempted + 1,
+      perfect:   s.perfect + (result.perfect ? 1 : 0),
+      rows:      s.rows + result.total,
+      correctRows: s.correctRows + result.correct,
+    }));
+    quiz.onCommit();
+    setQuiz(null);
+  };
+
   /* ---- Completion report ---- */
   const [learnerName, setLearnerName] = useState('');
   const [certStamp, setCertStamp] = useState('');
@@ -6198,10 +6409,12 @@ function App() {
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
 
   return (
+    <QuizCtx.Provider value={{ quizMode, openQuiz }}>
     <div id="app-shell" className={`min-h-screen ${storyMode ? 'pb-24' : ''}`}>
+      {quiz && <JournalQuiz data={quiz.data} lang={lang} onPass={finishQuiz} onClose={() => setQuiz(null)} />}
       <AuditPackage allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} stamp={packStamp} company={company} />
       <CompletionReport allSteps={allSteps} simParams={simParams} materials={materials} copa={copa}
-        lang={lang} stamp={certStamp} learner={learnerName} company={company} />
+        lang={lang} stamp={certStamp} learner={learnerName} company={company} quizStats={quizStats} />
       {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
       {storyMode && <StoryBar idx={storyIdx} setIdx={setStoryIdx} setActiveTab={setActiveTab} lang={lang}
         onExit={() => setStoryMode(false)} />}
@@ -6239,6 +6452,21 @@ function App() {
                 </button>
               </div>
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
+              {/* Quiz mode — post the entry yourself before the answer shows */}
+              {unlocked && (
+                <button
+                  onClick={() => setQuizMode(q => !q)}
+                  title={lang==='ko' ? '켜면 각 단계에서 분개를 직접 입력하고 채점받습니다'
+                                     : 'When on, you post each entry yourself and get graded'}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-semibold transition-colors
+                    ${quizMode ? 'border-purple-500 bg-purple-600 text-white'
+                               : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'}`}>
+                  ✍️ {lang==='ko' ? '채점 모드' : 'Quiz mode'}
+                  {quizMode && quizStats.attempted > 0 &&
+                    <span className="px-1 rounded bg-white/25 text-[10px]">{quizStats.perfect}/{quizStats.attempted}</span>}
+                </button>
+              )}
+              {unlocked && <div className="w-px h-5 bg-slate-200 mx-0.5" />}
               {/* Story (presentation) mode — 30-minute one-story walkthrough */}
               {unlocked && (
                 <button
@@ -6345,7 +6573,7 @@ function App() {
           <ScenarioPicker scenarioId={scenarioId} onApply={applyScenario} allSteps={allSteps} lang={lang} />}
         {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
           <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang}
-            learnerName={learnerName} setLearnerName={setLearnerName} onPrintReport={printCompletionReport} />}
+            learnerName={learnerName} setLearnerName={setLearnerName} onPrintReport={printCompletionReport} quizStats={quizStats} />}
         {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
         {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
           ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />}
@@ -6379,6 +6607,7 @@ function App() {
         </span>
       </footer>
     </div>
+    </QuizCtx.Provider>
   );
 }
 

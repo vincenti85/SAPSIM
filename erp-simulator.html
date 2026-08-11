@@ -78,7 +78,7 @@
   }
 
   /* The audit dossier exists only for the printer */
-  #audit-package { display: none; }
+  #audit-package, #completion-report { display: none; }
 
   /* ── Print (audit hand-out) ──
      Strip interactive chrome, force light ink-friendly colours, and stamp
@@ -99,6 +99,8 @@
     /* Audit package: print the dossier alone, not the surrounding app */
     body.print-pack #app-shell > *:not(#audit-package) { display: none !important; }
     body.print-pack #audit-package { display: block !important; }
+    body.print-cert #app-shell > *:not(#completion-report) { display: none !important; }
+    body.print-cert #completion-report { display: block !important; }
     /* Disclaimer stamped on every printed page */
     body::after {
       content: "교육용 가상 시나리오 — 실제 회계기록이 아닙니다 · Illustrative training scenario — not an accounting record";
@@ -3699,6 +3701,114 @@ function buildLedger(allSteps, simParams, materials, lang) {
    trial balance, control matrix and glossary. Rendered off-screen and only
    revealed to the printer, so the on-screen app is unaffected.
    ========================================================================= */
+/* =========================================================================
+   COMPLETION REPORT — a printable record of what the learner actually ran.
+   Deliberately a "이수 확인서 / record of completion", not a certificate:
+   this is a self-paced simulation with no proctoring or accredited body,
+   so claiming certification would misrepresent it.
+   ========================================================================= */
+const COMPLETION_MODULES = [
+  { key:'master', icon:'🗂️', ko:'기준정보 & 표준원가', en:'Master data & standard cost',
+    steps:['kp26','ck11n_h','ck24_h','ck11n_f','ck24_f'] },
+  { key:'mm', icon:'🛒', ko:'구매 (MM)', en:'Procurement (MM)',
+    steps:['me21n','migo_gr','miro','f53'] },
+  { key:'pp', icon:'🏭', ko:'생산 (PP)', en:'Production (PP)',
+    steps:['co01_h','gi_h','co11n_h','gr_h','co01_f','gi_f','co11n_f','gr_f','ko88_h','ko88_f'] },
+  { key:'fico', icon:'📊', ko:'원가결산 (CO)', en:'Costing close (CO)',
+    steps:['kss2','sl_roh','sl_halb','ml','pc','ke27'] },
+  { key:'overhead', icon:'🧾', ko:'일반경비 (SG&A)', en:'Overhead (SG&A)',
+    steps:['fb50','ksb1','ksu5','ke30'] },
+  { key:'sd', icon:'💵', ko:'매출 (SD)', en:'Sales (SD)',
+    steps:['va01','vl01n','vf01','f28'] },
+];
+const completionStats = (allSteps) => {
+  const rows = COMPLETION_MODULES.map(m => {
+    const done = m.steps.filter(s => allSteps[s]).length;
+    return { ...m, done, total: m.steps.length, pct: Math.round(done / m.steps.length * 100) };
+  });
+  const done = rows.reduce((s, r) => s + r.done, 0);
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  return { rows, done, total, pct: total ? Math.round(done / total * 100) : 0,
+           complete: done === total };
+};
+const CompletionReport = ({ allSteps, simParams, materials, copa, lang='ko', stamp, learner }) => {
+  const ko = lang === 'ko';
+  const st = completionStats(allSteps);
+  const v = computeVariances(simParams, materials);
+  const { entries, balanced } = buildLedger(allSteps, simParams, materials, lang);
+  const ctrls = CONTROLS.filter(c => allSteps[c.at]);
+  const closed = !!allSteps.pc;
+  const cogs = allSteps.vl01n ? (closed && copa ? copa.actualCOGS : v.stdCogs) : 0;
+  const rev  = allSteps.vf01 ? v.revenue : 0;
+  const money = (n) => `$${Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const th = 'border border-slate-300 px-2 py-1 bg-slate-200 text-left';
+  const td = 'border border-slate-300 px-2 py-1';
+  return (
+    <div id="completion-report" className="text-slate-800">
+      <h1 className="text-2xl font-extrabold">{ko ? '실습 이수 확인서' : 'Record of Completion'}</h1>
+      <p className="text-xs text-slate-600 mt-1">
+        {ko ? 'ERP 프로세스 학습 시뮬레이터 — 구매부터 원가결산·매출까지 엔드투엔드 실습'
+            : 'ERP Process Learning Simulator — end-to-end practice from procurement through costing close and sales'}
+      </p>
+      <table className="w-full text-[11px] border-collapse mt-4">
+        <tbody>
+          <tr><td className={td+' w-32 font-semibold bg-slate-100'}>{ko?'이수자':'Learner'}</td>
+              <td className={td}>{learner && learner.trim() ? learner : (ko?'________________________':'________________________')}</td>
+              <td className={td+' w-32 font-semibold bg-slate-100'}>{ko?'발급일시':'Issued'}</td>
+              <td className={td}>{stamp}</td></tr>
+          <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'실습 사례':'Case'}</td>
+              <td className={td}>{COMPANY.name} · {COMPANY.code} · {COMPANY.plant}</td>
+              <td className={td+' font-semibold bg-slate-100'}>{ko?'전체 진행률':'Overall progress'}</td>
+              <td className={td+' font-bold'}>{st.pct}% ({st.done}/{st.total} {ko?'단계':'steps'})</td></tr>
+        </tbody>
+      </table>
+
+      <h2 className="text-sm font-bold mt-5 mb-1.5 border-b border-slate-300 pb-1">{ko?'1. 모듈별 이수 현황':'1. Completion by module'}</h2>
+      <table className="w-full text-[11px] border-collapse">
+        <thead><tr>
+          <th className={th}>{ko?'모듈':'Module'}</th><th className={th}>{ko?'실행 단계':'Steps run'}</th>
+          <th className={th}>{ko?'진행률':'Progress'}</th><th className={th}>{ko?'상태':'Status'}</th>
+        </tr></thead>
+        <tbody>
+          {st.rows.map(r => (
+            <tr key={r.key}>
+              <td className={td}>{r.icon} {ko?r.ko:r.en}</td>
+              <td className={td}>{r.done} / {r.total}</td>
+              <td className={td}>{r.pct}%</td>
+              <td className={td}>{r.done===r.total ? (ko?'이수':'Complete') : r.done>0 ? (ko?'진행 중':'In progress') : (ko?'미실행':'Not started')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2 className="text-sm font-bold mt-5 mb-1.5 border-b border-slate-300 pb-1">{ko?'2. 실습 결과 요약':'2. Results summary'}</h2>
+      <table className="w-full text-[11px] border-collapse">
+        <tbody>
+          <tr><td className={td+' font-semibold bg-slate-100 w-48'}>{ko?'전기된 전표':'Documents posted'}</td><td className={td}>{entries.filter(e=>e.docNo).length}{ko?'건':''}</td>
+              <td className={td+' font-semibold bg-slate-100 w-48'}>{ko?'장부 정합성':'Books balance'}</td><td className={td}>{balanced ? (ko?'차변 = 대변':'Debits = Credits') : (ko?'불일치':'Out of balance')}</td></tr>
+          <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'매출액':'Revenue'}</td><td className={td}>{money(rev)}</td>
+              <td className={td+' font-semibold bg-slate-100'}>{ko?'매출원가':'COGS'}</td><td className={td}>{money(cogs)}{closed?(ko?' (실제원가 반영)':' (actual)'):(ko?' (표준)':' (standard)')}</td></tr>
+          <tr><td className={td+' font-semibold bg-slate-100'}>{ko?'순 원가차이':'Net variance'}</td>
+              <td className={td}>{(allSteps.ko88_h||allSteps.ko88_f) ? `${money(Math.abs(v.net))} ${v.net>0?(ko?'불리':'unfav.'):(ko?'유리':'fav.')}` : '—'}</td>
+              <td className={td+' font-semibold bg-slate-100'}>{ko?'작동한 통제':'Controls exercised'}</td><td className={td}>{ctrls.length} / {CONTROLS.length}</td></tr>
+        </tbody>
+      </table>
+
+      <h2 className="text-sm font-bold mt-5 mb-1.5 border-b border-slate-300 pb-1">{ko?'3. 작동한 통제 목록':'3. Controls exercised'}</h2>
+      {ctrls.length === 0
+        ? <p className="text-[11px] text-slate-500">{ko?'아직 작동한 통제가 없습니다.':'No controls exercised yet.'}</p>
+        : <ul className="text-[11px] list-disc pl-5">
+            {ctrls.map(c => <li key={c.id}><span className="font-mono">{c.id}</span> {(ko?c.ko:c.en).n} — {(ko?c.ko:c.en).a}</li>)}
+          </ul>}
+
+      <p className="mt-6 text-[10px] leading-relaxed border border-slate-300 bg-slate-50 p-2">
+        {ko ? '본 문서는 학습자가 교육용 시뮬레이터에서 실제로 실행한 단계를 기록한 이수 확인서입니다. 감독·평가를 거친 자격 증명이 아니며, 공인 자격이나 학점을 보증하지 않습니다. 실습 사례의 회사·거래·금액은 모두 가상입니다. SAP 및 SAP ECC는 SAP SE의 등록상표이며 본 도구는 SAP SE와 제휴 관계가 없습니다.'
+            : 'This document records the steps a learner actually executed in a training simulator. It is not a proctored or accredited credential and certifies no qualification or academic credit. The company, transactions and amounts in the case are fictitious. SAP and SAP ECC are trademarks of SAP SE; this tool is not affiliated with SAP SE.'}
+      </p>
+    </div>
+  );
+};
+
 const AuditPackage = ({ allSteps, simParams, materials, lang='ko', stamp }) => {
   const ko = lang === 'ko';
   const { entries, tbRows, totalDr, totalCr, balanced } = buildLedger(allSteps, simParams, materials, lang);
@@ -5187,7 +5297,8 @@ const KPI_GOALS = [
   { id:'bal',   icon:'⚖️', ko:['장부 정합','차변 합계 = 대변 합계'],
                            en:['Books balance','Total debits equal total credits'] },
 ];
-const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
+const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko',
+                        learnerName, setLearnerName, onPrintReport }) => {
   const ko = lang === 'ko';
   const v = computeVariances(simParams, materials);
   const closed = !!allSteps.pc;
@@ -5281,6 +5392,39 @@ const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko' }) => {
           );
         })}
       </div>
+
+      {/* Completion report — issued from whatever has actually been run */}
+      {onPrintReport && (() => {
+        const st = completionStats(allSteps);
+        return (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[220px]">
+              <div className="text-xs font-semibold text-slate-700">
+                🎓 {ko ? '실습 이수 확인서' : 'Record of completion'}
+                <span className={`ml-2 text-[11px] font-bold ${st.complete ? 'text-green-600' : 'text-slate-500'}`}>
+                  {st.pct}% ({st.done}/{st.total})
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 w-full max-w-md bg-slate-100 rounded-full overflow-hidden">
+                <span className={`block h-full rounded-full transition-all ${st.complete ? 'bg-green-500' : 'bg-indigo-400'}`}
+                  style={{ width: st.pct + '%' }} />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {st.complete
+                  ? (ko ? '전 과정을 완주했습니다. 확인서를 발급할 수 있습니다.' : 'Full cycle complete — you can issue the record.')
+                  : (ko ? '지금까지 실행한 단계만 기록됩니다. 언제든 발급할 수 있습니다.' : 'Records only what you have run so far; you can issue it at any time.')}
+              </p>
+            </div>
+            <input value={learnerName} onChange={e => setLearnerName(e.target.value)}
+              placeholder={ko ? '이수자 이름 (선택)' : 'Learner name (optional)'}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs w-44 outline-none focus:border-indigo-400" />
+            <button onClick={onPrintReport}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition-colors">
+              🖨 {ko ? '확인서 발급' : 'Issue record'}
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -5525,6 +5669,20 @@ function App() {
       }
     };
     reader.readAsText(file);
+  };
+
+  /* ---- Completion report ---- */
+  const [learnerName, setLearnerName] = useState('');
+  const [certStamp, setCertStamp] = useState('');
+  const printCompletionReport = () => {
+    setCertStamp(new Date().toLocaleString(lang === 'ko' ? 'ko-KR' : 'en-US'));
+    document.body.classList.add('print-cert');
+    const cleanup = () => {
+      document.body.classList.remove('print-cert');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => { window.print(); setTimeout(cleanup, 0); }, 60);
   };
 
   // Print the audit dossier: stamp it, swap the print target, restore after.
@@ -5784,6 +5942,8 @@ function App() {
   return (
     <div id="app-shell" className={`min-h-screen ${storyMode ? 'pb-24' : ''}`}>
       <AuditPackage allSteps={allSteps} simParams={simParams} materials={materials} lang={lang} stamp={packStamp} />
+      <CompletionReport allSteps={allSteps} simParams={simParams} materials={materials} copa={copa}
+        lang={lang} stamp={certStamp} learner={learnerName} />
       {showPopup && <JournalPopup data={popupData} onClose={() => setShowPopup(false)} />}
       {storyMode && <StoryBar idx={storyIdx} setIdx={setStoryIdx} setActiveTab={setActiveTab} lang={lang}
         onExit={() => setStoryMode(false)} />}
@@ -5924,7 +6084,8 @@ function App() {
         {!unlocked && <LandingHero lang={lang} onFocusPin={() => focusPin(0)} />}
         {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
         {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
-          <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} />}
+          <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang}
+            learnerName={learnerName} setLearnerName={setLearnerName} onPrintReport={printCompletionReport} />}
         {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
         {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
           ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />}

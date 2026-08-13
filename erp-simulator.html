@@ -1242,6 +1242,22 @@ const Card = ({ title, children, className='' }) => (
   </div>
 );
 
+/* One-line summary with the reasoning tucked behind a toggle. Screens were
+   carrying three-sentence explanations that pushed the actual work below the
+   fold; the substance is kept, just not shouted. */
+const Detail = ({ label, children, lang='ko' }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(o => !o)}
+        className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors">
+        {open ? '▾ ' : '▸ '}{label || (lang === 'ko' ? '자세히' : 'Why')}
+      </button>
+      {open && <div className="mt-1 text-[11px] text-slate-500 leading-relaxed">{children}</div>}
+    </>
+  );
+};
+
 const Money = ({ v }) => <span>${Number(v).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:3})}</span>;
 
 /* =========================================================================
@@ -1701,6 +1717,270 @@ const MAPPING_DATA = [
   { fn:'F35', tcode:'KSU5',   ko:'원가센터 배분 (Assessment)', en:'Run Cost Center Assessment',   oracle:'CST — Overhead Allocation' },
   { fn:'F36', tcode:'KE30',   ko:'손익·CO-PA 반영 확인',      en:'Confirm P&L / CO-PA Impact',    oracle:'PA/OBIEE — Profitability Report' },
 ];
+/* =========================================================================
+   SAP SCREEN REFERENCE — the bridge from this simulator to the real system.
+
+   Deliberately field names, not screenshots: reproducing SAP GUI captures
+   would be a trademark and copyright problem, and the de-branding policy
+   this project already follows rules it out. Field labels and the screen's
+   tab structure are the part a learner actually needs to move across, so
+   that is what is documented — which entry field on which SAP screen holds
+   the value this simulator asks for.
+   ========================================================================= */
+const SAP_SCREENS = [
+  { fn:'F09', tcode:'ME21N', mod:'MM',
+    ko:['구매오더 생성','Enjoy 화면 — 헤더 / 품목개요 / 품목상세 3단 구성'],
+    en:['Create Purchase Order','Enjoy screen — header / item overview / item detail'],
+    areas:[
+      { ko:'헤더', en:'Header', fields:[
+        { sap:'Vendor', tech:'LIFNR', ko:'공급업체', en:'Vendor', here:'V001' },
+        { sap:'Doc. Date', tech:'BEDAT', ko:'증빙일', en:'Document date', here:'—' },
+        { sap:'Purch. Org / Group', tech:'EKORG / EKGRP', ko:'구매조직·구매그룹', en:'Purch. org / group', here:'—' },
+      ]},
+      { ko:'품목', en:'Item', fields:[
+        { sap:'Material', tech:'MATNR', ko:'자재', en:'Material', here:'RM001' },
+        { sap:'PO Quantity', tech:'MENGE', ko:'발주수량', en:'PO quantity', here:'수량 / Qty' },
+        { sap:'Net Price', tech:'NETPR', ko:'단가', en:'Net price', here:'발주가 / PO price' },
+        { sap:'Plant', tech:'WERKS', ko:'플랜트', en:'Plant', here:'P001' },
+      ]},
+    ]},
+  { fn:'F10', tcode:'MIGO', mod:'MM',
+    ko:['입고 (이동유형 101)','상단 액션 «Goods Receipt» + 참조 «Purchase Order» 선택'],
+    en:['Goods Receipt (movement 101)','Action “Goods Receipt” with reference “Purchase Order”'],
+    areas:[
+      { ko:'헤더', en:'Header', fields:[
+        { sap:'Movement Type', tech:'BWART', ko:'이동유형', en:'Movement type', here:'101' },
+        { sap:'Purchase Order', tech:'EBELN', ko:'참조 구매오더', en:'Reference PO', here:'PO-0001' },
+      ]},
+      { ko:'품목 / 수량 탭', en:'Item / Quantity tab', fields:[
+        { sap:'Qty in Unit of Entry', tech:'ERFMG', ko:'입고수량', en:'Received qty', here:'수량 / Qty' },
+        { sap:'Stock Type', tech:'INSMK', ko:'재고유형', en:'Stock type', here:'가용 / Unrestricted' },
+        { sap:'Item OK', tech:'—', ko:'품목 확인 체크', en:'Item OK flag', here:'—' },
+      ]},
+    ]},
+  { fn:'F11', tcode:'MIRO', mod:'MM',
+    ko:['송장검증 (3-way)','기본데이터 / 지급 / 세부사항 탭 + 잔액 표시기'],
+    en:['Invoice Verification (3-way)','Basic data / Payment / Details tabs with a balance indicator'],
+    areas:[
+      { ko:'기본데이터', en:'Basic data', fields:[
+        { sap:'Invoice Date', tech:'BLDAT', ko:'송장일', en:'Invoice date', here:'—' },
+        { sap:'Amount', tech:'WRBTR', ko:'송장금액', en:'Amount', here:'GR/IR 금액 / GR-IR value' },
+        { sap:'Balance', tech:'—', ko:'잔액 (0이어야 전기 가능)', en:'Balance (must be zero to post)', here:'대차 일치 검증' },
+      ]},
+      { ko:'품목 명세', en:'Item list', fields:[
+        { sap:'PO Reference', tech:'EBELN', ko:'참조 구매오더', en:'PO reference', here:'PO-0001' },
+        { sap:'Quantity / Amount', tech:'MENGE / WRBTR', ko:'수량·금액 대조', en:'Qty / amount match', here:'통제 C-01' },
+      ]},
+    ]},
+  { fn:'F13', tcode:'CO01', mod:'PP',
+    ko:['생산오더 생성','헤더 / 운영 / 구성품 개요'],
+    en:['Create Production Order','Header / operations / component overview'],
+    areas:[
+      { ko:'초기 화면', en:'Initial screen', fields:[
+        { sap:'Material', tech:'MATNR', ko:'생산 자재', en:'Material to produce', here:'SF001 · FG001' },
+        { sap:'Order Type', tech:'AUART', ko:'오더유형', en:'Order type', here:'—' },
+        { sap:'Total Quantity', tech:'GAMNG', ko:'생산수량', en:'Total quantity', here:'생산량 / Output qty' },
+      ]},
+      { ko:'구성품 개요', en:'Component overview', fields:[
+        { sap:'Component / Reqmt Qty', tech:'MATNR / BDMNG', ko:'구성품·소요량 (BOM 전개)', en:'Component / requirement qty', here:'BOM 트리' },
+      ]},
+    ]},
+  { fn:'F15', tcode:'CO11N', mod:'PP',
+    ko:['생산 확정','확정 헤더 + 액티비티 시간 입력'],
+    en:['Production Confirmation','Confirmation header with activity time entry'],
+    areas:[
+      { ko:'확정', en:'Confirmation', fields:[
+        { sap:'Yield', tech:'LMNGA', ko:'양품수량', en:'Yield quantity', here:'생산량 / Output qty' },
+        { sap:'Scrap', tech:'XMNGA', ko:'불량수량', en:'Scrap quantity', here:'—' },
+        { sap:'Activity 1 / 2', tech:'ISM01 / ISM02', ko:'노무시간·기계시간', en:'Labour / machine hours', here:'노무·기계 시간' },
+      ]},
+    ]},
+  { fn:'F04', tcode:'KP26', mod:'CO',
+    ko:['액티비티 단가 계획','계획 레이아웃 기반 표 입력'],
+    en:['Plan Activity Rates','Layout-based planning grid'],
+    areas:[
+      { ko:'선택 화면', en:'Selection', fields:[
+        { sap:'Version / Period', tech:'VERSN / PERBL', ko:'버전·기간', en:'Version / period', here:'—' },
+        { sap:'Cost Center', tech:'KOSTL', ko:'원가센터', en:'Cost center', here:'CC001 · CC002' },
+        { sap:'Activity Type', tech:'LSTAR', ko:'액티비티 유형', en:'Activity type', here:'노무 · 기계' },
+      ]},
+      { ko:'계획 표', en:'Planning grid', fields:[
+        { sap:'Fixed / Variable Price', tech:'TKF / TKV', ko:'고정·변동 단가', en:'Fixed / variable rate', here:'시간당 단가' },
+      ]},
+    ]},
+  { fn:'F05', tcode:'CK11N', mod:'CO',
+    ko:['표준원가 계산','원가추정 — 원가내역 / 원가구성요소'],
+    en:['Create Cost Estimate','Costing — itemization and cost components'],
+    areas:[
+      { ko:'초기 화면', en:'Initial screen', fields:[
+        { sap:'Material / Plant', tech:'MATNR / WERKS', ko:'자재·플랜트', en:'Material / plant', here:'SF001 → FG001' },
+        { sap:'Costing Variant', tech:'KLVAR', ko:'원가추정 변형', en:'Costing variant', here:'—' },
+        { sap:'Costing / Valuation Date', tech:'—', ko:'원가계산일·평가일', en:'Costing / valuation date', here:'—' },
+      ]},
+      { ko:'결과', en:'Result', fields:[
+        { sap:'Cost Component View', tech:'—', ko:'재료비·노무비·기계비 구성', en:'Material / labour / machine split', here:'표준원가 구성' },
+      ]},
+    ]},
+  { fn:'F21', tcode:'KO88', mod:'CO',
+    ko:['오더 정산','파라미터 + 테스트런 / 실행'],
+    en:['Order Settlement','Parameters with test run / execute'],
+    areas:[
+      { ko:'파라미터', en:'Parameters', fields:[
+        { sap:'Order', tech:'AUFNR', ko:'생산오더', en:'Production order', here:'PR-0001' },
+        { sap:'Settlement Period / Year', tech:'—', ko:'정산 기간·연도', en:'Settlement period / year', here:'—' },
+        { sap:'Processing Type', tech:'—', ko:'처리유형 (자동)', en:'Processing type (automatic)', here:'—' },
+        { sap:'Test Run', tech:'—', ko:'테스트런 체크', en:'Test run flag', here:'—' },
+      ]},
+    ]},
+  { fn:'F31', tcode:'CKMLCP', mod:'CO',
+    ko:['실제원가 결산 (Material Ledger)','단계별 실행 — 선택→원가계산→단일레벨→다중레벨→결산전기'],
+    en:['Actual Costing Cockpit','Step chain — select, determine, single-level, multilevel, post closing'],
+    areas:[
+      { ko:'코크핏', en:'Cockpit', fields:[
+        { sap:'Costing Run / Date', tech:'—', ko:'결산런·실행일', en:'Costing run / date', here:'—' },
+        { sap:'Plant', tech:'WERKS', ko:'플랜트', en:'Plant', here:'P001' },
+        { sap:'Single-Level / Multilevel', tech:'—', ko:'단일·다중레벨 단계', en:'Single-level / multilevel steps', here:'F28~F30' },
+        { sap:'Post Closing', tech:'—', ko:'결산전기 (기간 잠금)', en:'Post closing (locks period)', here:'F31 · 통제 C-05' },
+      ]},
+    ]},
+  { fn:'F33', tcode:'FB50', mod:'FI',
+    ko:['일반전표 입력','G/L 계정 라인 + 차대 잔액 신호등'],
+    en:['G/L Account Posting','Line items with a debit/credit balance light'],
+    areas:[
+      { ko:'헤더', en:'Header', fields:[
+        { sap:'Document Date', tech:'BLDAT', ko:'증빙일', en:'Document date', here:'—' },
+        { sap:'Company Code', tech:'BUKRS', ko:'회사코드', en:'Company code', here:'US01' },
+      ]},
+      { ko:'라인 항목', en:'Line items', fields:[
+        { sap:'G/L Account', tech:'HKONT', ko:'계정', en:'G/L account', here:'급여·임차료 등' },
+        { sap:'D/C', tech:'SHKZG', ko:'차변·대변 표시', en:'Debit / credit indicator', here:'Dr · Cr' },
+        { sap:'Amount', tech:'WRBTR', ko:'금액', en:'Amount', here:'금액' },
+        { sap:'Cost Center', tech:'KOSTL', ko:'원가센터 배정', en:'Cost center assignment', here:'CC003 · CC004' },
+      ]},
+    ]},
+  { fn:'F35', tcode:'KSU5', mod:'CO',
+    ko:['원가센터 배분 (Assessment)','사이클/세그먼트 선택 후 실행'],
+    en:['Cost Center Assessment','Select cycle and segment, then execute'],
+    areas:[
+      { ko:'실행 파라미터', en:'Run parameters', fields:[
+        { sap:'Cycle / Start Date', tech:'—', ko:'배분 사이클·시작일', en:'Cycle / start date', here:'—' },
+        { sap:'Sender / Receiver', tech:'—', ko:'송신 원가센터 → 수신 세그먼트', en:'Sender → receiver', here:'CC003·CC004 → CO-PA' },
+        { sap:'Tracing Factor', tech:'—', ko:'배분 기준 (통계키)', en:'Tracing factor', here:'매출액 비율 등' },
+      ]},
+    ]},
+  { fn:'F23', tcode:'VA01', mod:'SD',
+    ko:['판매오더 생성','헤더 / 품목개요 / 스케줄라인'],
+    en:['Create Sales Order','Header / item overview / schedule lines'],
+    areas:[
+      { ko:'초기·헤더', en:'Initial / header', fields:[
+        { sap:'Order Type', tech:'AUART', ko:'오더유형', en:'Order type', here:'—' },
+        { sap:'Sold-To Party', tech:'KUNNR', ko:'판매처', en:'Sold-to party', here:'C001' },
+        { sap:'Sales Area', tech:'VKORG/VTWEG/SPART', ko:'영업조직·유통경로·제품군', en:'Sales area', here:'—' },
+      ]},
+      { ko:'품목', en:'Item', fields:[
+        { sap:'Material / Order Qty', tech:'MATNR / KWMENG', ko:'자재·수주수량', en:'Material / order qty', here:'FG001 · 수량' },
+        { sap:'Net Value', tech:'NETWR', ko:'금액', en:'Net value', here:'판매가 × 수량' },
+      ]},
+    ]},
+  { fn:'F24', tcode:'VL01N', mod:'SD',
+    ko:['출하 / 재고출고(PGI)','피킹 탭 + Post Goods Issue 버튼'],
+    en:['Outbound Delivery','Picking tab and Post Goods Issue'],
+    areas:[
+      { ko:'출하', en:'Delivery', fields:[
+        { sap:'Shipping Point', tech:'VSTEL', ko:'출하지점', en:'Shipping point', here:'—' },
+        { sap:'Picked Quantity', tech:'PIKMG', ko:'피킹수량', en:'Picked quantity', here:'판매수량' },
+        { sap:'Post Goods Issue', tech:'—', ko:'출고전기 → 매출원가 인식', en:'PGI → recognises COGS', here:'통제 C-07' },
+      ]},
+    ]},
+  { fn:'F25', tcode:'VF01', mod:'SD',
+    ko:['청구 (Billing)','청구문서 개요 + 회계 전기'],
+    en:['Create Billing Document','Billing overview with accounting release'],
+    areas:[
+      { ko:'청구', en:'Billing', fields:[
+        { sap:'Billing Type', tech:'FKART', ko:'청구유형', en:'Billing type', here:'—' },
+        { sap:'Billing Date', tech:'FKDAT', ko:'청구일', en:'Billing date', here:'통제 C-08' },
+        { sap:'Net Value / Tax', tech:'NETWR / MWSBK', ko:'금액·세액', en:'Net value / tax', here:'매출액' },
+      ]},
+    ]},
+];
+const SapScreenTab = ({ lang='ko' }) => {
+  const ko = lang === 'ko';
+  const [open, setOpen] = useState(SAP_SCREENS[0].fn);
+  const modCls = { MM:'bg-blue-100 text-blue-700', PP:'bg-orange-100 text-orange-700',
+                   CO:'bg-indigo-100 text-indigo-700', SD:'bg-teal-100 text-teal-700', FI:'bg-fuchsia-100 text-fuchsia-700' };
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h2 className="text-base font-bold text-slate-800">🖥 {ko?'실제 SAP 화면 대조':'Real SAP screen reference'}</h2>
+        <p className="text-xs text-slate-500 mt-1">
+          {ko ? '이 시뮬레이터의 값이 실제 SAP 화면의 어느 입력 항목에 해당하는지 대조합니다.'
+              : 'Which entry field on the real SAP screen holds the value this simulator asks for.'}
+        </p>
+        <div className="mt-1.5">
+          <Detail label={ko?'화면 캡처 대신 필드로 제공하는 이유':'Why fields, not screenshots'} lang={lang}>
+            {ko ? 'SAP GUI 화면 캡처를 싣는 것은 상표·저작권 문제가 있어 본 프로젝트의 디브랜딩 정책과 맞지 않습니다. 실제 이전에 필요한 것은 «어느 화면의 어느 항목에 무엇을 넣는가»이므로, 필드명과 화면 구성으로 제공합니다. 기술명(MATNR 등)은 SAP 표준 필드명입니다.'
+                : 'Reproducing SAP GUI captures raises trademark and copyright issues and conflicts with this project’s de-branding policy. What a learner actually needs when moving across is which field on which screen takes which value, so that is what is documented. Technical names (MATNR and so on) are SAP standard field names.'}
+          </Detail>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {SAP_SCREENS.map(sc => {
+          const [title, layout] = ko ? sc.ko : sc.en;
+          const isOpen = open === sc.fn;
+          return (
+            <div key={sc.fn} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <button onClick={() => setOpen(isOpen ? null : sc.fn)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors">
+                <span className="font-mono text-[11px] text-slate-400 w-9">{sc.fn}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${modCls[sc.mod]}`}>{sc.mod}</span>
+                <span className="font-mono text-sm font-bold text-blue-700 w-24">{sc.tcode}</span>
+                <span className="text-sm text-slate-700">{title}</span>
+                <span className="ml-auto text-slate-400 text-xs">{isOpen ? '▾' : '▸'}</span>
+              </button>
+              {isOpen && (
+                <div className="border-t border-slate-100 px-4 py-3">
+                  <p className="text-[11px] text-slate-500 mb-2">🗂 {layout}</p>
+                  {sc.areas.map((ar, i) => (
+                    <div key={i} className="mb-3 last:mb-0">
+                      <div className="text-[11px] font-bold text-slate-600 mb-1">{ko ? ar.ko : ar.en}</div>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-slate-400 text-left border-b border-slate-100">
+                            <th className="py-1 font-medium w-48">{ko?'SAP 필드':'SAP field'}</th>
+                            <th className="py-1 font-medium w-24">{ko?'기술명':'Technical'}</th>
+                            <th className="py-1 font-medium">{ko?'의미':'Meaning'}</th>
+                            <th className="py-1 font-medium w-44">{ko?'이 시뮬레이터':'In this simulator'}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ar.fields.map((f, j) => (
+                            <tr key={j} className="border-b border-slate-50 last:border-0">
+                              <td className="py-1 font-medium text-slate-700">{f.sap}</td>
+                              <td className="py-1 font-mono text-[11px] text-slate-400">{f.tech}</td>
+                              <td className="py-1 text-slate-600">{ko ? f.ko : f.en}</td>
+                              <td className="py-1 text-indigo-700">{f.here}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-slate-400">
+        {ko ? 'SAP 및 SAP ECC는 SAP SE의 등록상표입니다. 필드명은 학습 대조용으로만 표기했으며 본 도구는 SAP SE와 제휴 관계가 없습니다.'
+            : 'SAP and SAP ECC are trademarks of SAP SE. Field names are shown for educational cross-reference only; this tool is not affiliated with SAP SE.'}
+      </p>
+    </div>
+  );
+};
+
 const MappingModal = ({ lang, onClose }) => {
   const ko = lang === 'ko';
   return (
@@ -1963,8 +2243,8 @@ const LandingHero = ({ lang, onFocusPin }) => {
               : <>Follow one quarter of an auto-parts plant<br className="hidden sm:block" /> from purchasing to profit — <span className="text-indigo-600">entry by entry</span></>}
         </h2>
         <p className="mt-3 text-sm text-slate-600 leading-relaxed max-w-2xl">
-          {ko ? '자재를 사고, 반제품과 완제품을 만들고, 원가를 결산하고, 파는 전 과정을 실제 회계 전표와 함께 단계별로 실행해 봅니다. 화면마다 지금 할 일 하나만 보여주므로 ERP가 처음이어도 순서를 잃지 않습니다.'
-              : 'Buy materials, build semi-finished and finished goods, close the costing, and sell — every step executed with the actual accounting entry beside it. Each screen shows only the one next action, so first-timers never lose the thread.'}
+          {ko ? '구매 → 생산 → 원가결산 → 매출을 실제 분개와 함께 한 단계씩 실행합니다. 화면마다 «지금 할 일» 하나만 보여줍니다.'
+              : 'Run buy → make → close → sell one step at a time, each with its journal entry. Every screen shows just the one next action.'}
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <IntroButton lang={lang} cta />
@@ -2028,8 +2308,12 @@ const LandingHero = ({ lang, onFocusPin }) => {
 
       {/* Trust / provenance */}
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500 leading-relaxed">
-        {ko ? '미국 자동차부품 제조업 기준의 가상 회사·가상 거래로 구성한 독립 교육용 시뮬레이터입니다. 실제 회계기록이 아니며, SAP SE 및 Oracle과 제휴·후원·보증 관계가 없습니다. PIN은 실습 모드 접근용으로, 강사 또는 배포자에게 문의하세요.'
-            : 'An independent training simulator built on a fictitious US auto-parts manufacturer with fictitious transactions. It is not an accounting record, and is not affiliated with, sponsored by, or endorsed by SAP SE or Oracle. The PIN unlocks the practice mode — ask your instructor or the distributor.'}
+        {ko ? '가상 회사·가상 거래로 만든 독립 교육용 도구입니다. 실제 회계기록이 아닙니다.'
+            : 'An independent training tool using a fictitious company and transactions — not an accounting record.'}
+        <Detail lang={lang}>
+          {ko ? 'SAP SE 및 Oracle과 제휴·후원·보증 관계가 없습니다. PIN은 실습 모드 접근용으로, 강사 또는 배포자에게 문의하세요.'
+              : 'Not affiliated with, sponsored by, or endorsed by SAP SE or Oracle. The PIN unlocks practice mode — ask your instructor or the distributor.'}
+        </Detail>
       </div>
     </div>
   );
@@ -3933,9 +4217,9 @@ const RcmTab = ({ allSteps, setActiveTab, lang='ko' }) => {
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="text-base font-bold text-slate-800">🛡 {ko ? '통제 매트릭스 (Risk Control Matrix)' : 'Risk Control Matrix'}</h2>
-        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-          {ko ? '이 시나리오에 내재된 통제점을 감사 문서 형식으로 정리했습니다. 각 통제는 실제 실행 단계와 연결되어 있어, 통제가 어느 화면에서 작동하는지 바로 확인할 수 있습니다.'
-              : 'The control points embedded in this scenario, laid out the way an audit file expects. Each control links to the step where it operates.'}
+        <p className="text-xs text-slate-500 mt-1">
+          {ko ? '이 시나리오의 통제점을 감사 문서 형식으로 정리했습니다. 각 통제는 실행 단계와 연결됩니다.'
+              : 'This scenario’s controls in audit-file form, each linked to the step where it operates.'}
         </p>
         <p className="text-[11px] text-slate-400 mt-2">
           {ko ? `총 ${CONTROLS.length}개 통제 중 ${done}개가 이번 실행에서 작동했습니다.` : `${done} of ${CONTROLS.length} controls exercised in this run.`}
@@ -3990,10 +4274,12 @@ const RcmTab = ({ allSteps, setActiveTab, lang='ko' }) => {
         </table>
       </div>
 
-      <p className="text-[11px] text-slate-400 leading-relaxed">
-        {ko ? '유형: 예방(사전 차단) / 적발(사후 발견). 방법: 수동 · 자동 · IT 의존(시스템 산출물에 의존하는 수동 통제). 재무제표 주장은 해당 통제가 뒷받침하는 항목입니다.'
-            : 'Type: preventive (blocks before) / detective (finds after). Method: manual, automated, or IT-dependent (a manual control relying on a system-generated report). The assertion column names what the control supports.'}
-      </p>
+      <div className="text-[11px] text-slate-400">
+        <Detail label={ko?'컬럼 읽는 법':'How to read the columns'} lang={lang}>
+          {ko ? '유형 — 예방(사전 차단) / 적발(사후 발견) · 방법 — 수동 / 자동 / IT 의존(시스템 산출물에 기대는 수동 통제) · 주장 — 이 통제가 뒷받침하는 재무제표 항목'
+              : 'Type — preventive (blocks before) / detective (finds after) · Method — manual / automated / IT-dependent · Assertion — what the control supports'}
+        </Detail>
+      </div>
     </div>
   );
 };
@@ -4351,8 +4637,13 @@ const WalkthroughTab = ({ allSteps, simParams, materials, lang='ko' }) => {
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="text-base font-bold text-slate-800">🔎 {ko ? '워크스루 시트' : 'Walkthrough Sheet'}</h2>
         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-          {ko ? '표본 거래 한 건을 처음부터 끝까지 따라가며, 각 단계에서 무엇을 확인했고 어떤 증빙이 남는지, 통제가 작동했는지를 정리합니다. 감사인이 설계 유효성을 판단할 때 가장 먼저 요구하는 문서입니다.'
-              : 'Follows one sample transaction end to end, recording what was checked at each step, the evidence it leaves, and whether a control operated. This is the first document an auditor asks for when assessing design effectiveness.'}
+          {ko ? '표본 거래 한 건의 단계별 확인사항·증빙·통제 작동 여부.'
+              : 'One sample transaction: what was checked, the evidence, and whether a control operated.'}
+          <br/>
+          <Detail lang={lang}>
+            {ko ? '감사인이 설계 유효성을 판단할 때 가장 먼저 요구하는 문서입니다.'
+                : 'The first document an auditor asks for when assessing design effectiveness.'}
+          </Detail>
         </p>
       </div>
 
@@ -5126,8 +5417,13 @@ const InstructorTab = ({ lang='ko' }) => {
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="text-base font-bold text-slate-800">🧑‍🏫 {ko?'강사 뷰 — 학습 현황':'Instructor view — class roster'}</h2>
         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-          {ko ? '학습자가 분개원장 탭에서 「스냅샷 저장」으로 내려받은 파일을 한 번에 여러 개 선택해 불러오면, 진도·채점·장부 정합을 한 표로 볼 수 있습니다. 서버에 아무것도 전송되지 않으며, 파일은 이 브라우저에서만 읽습니다.'
-              : 'Learners save a snapshot from the Journal tab; select several files at once here to see progress, quiz results and book integrity in one table. Nothing is uploaded — the files are read in this browser only.'}
+          {ko ? '학습자 스냅샷 파일을 여러 개 선택하면 진도·채점·장부 정합이 한 표로 모입니다.'
+              : 'Select several learner snapshots to gather progress, quiz results and book integrity in one table.'}
+          <br/>
+          <Detail label={ko?'스냅샷은 어디서 받나요?':'Where do snapshots come from?'} lang={lang}>
+            {ko ? '학습자가 분개원장 탭에서 「스냅샷 저장」으로 내려받습니다. 서버 전송 없이 이 브라우저에서만 읽습니다.'
+                : 'Learners download one from the Journal tab. Nothing is uploaded — files are read in this browser only.'}
+          </Detail>
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <label className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold cursor-pointer hover:bg-indigo-700">
@@ -5300,13 +5596,15 @@ const ProblemBankTab = ({ scenarioId, simParams, materials, onLoadProblem, lang=
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="text-base font-bold text-slate-800">📚 {ko?'문제은행':'Problem bank'}</h2>
         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-          {ko ? '같은 프로세스를 조건만 바꿔 반복 실습하는 문제 모음입니다. 문제를 불러오면 해당 사례와 조건이 적용되고 진행 상태가 초기화되므로, 수업 참가자 전원이 동일한 숫자에서 출발합니다.'
-              : 'Repeatable cases that change only the conditions. Loading a problem applies its scenario and figures and clears progress, so everyone in the room starts from the same numbers.'}
+          {ko ? '조건만 바꿔 반복 실습하는 문제 모음. 불러오면 진행이 초기화되어 전원이 같은 숫자에서 시작합니다.'
+              : 'Cases that change only the conditions. Loading one clears progress so everyone starts from the same numbers.'}
         </p>
-        <p className="text-[11px] text-slate-400 mt-1.5">
-          {ko ? '정답은 저장된 값이 아니라 문제 조건에서 계산됩니다 — 엔진이 바뀌어도 정답이 어긋나지 않습니다.'
-              : 'Answers are computed from the problem’s own conditions, not stored, so they cannot fall out of step with the engine.'}
-        </p>
+        <div className="mt-1.5">
+          <Detail label={ko?'정답은 어떻게 계산되나요?':'How are answers derived?'} lang={lang}>
+            {ko ? '저장된 정답표가 아니라 문제 조건에서 실시간 계산합니다 — 엔진이 바뀌어도 어긋나지 않습니다.'
+                : 'Computed live from the problem’s own conditions rather than a stored key, so they cannot drift from the engine.'}
+          </Detail>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -5433,9 +5731,14 @@ const WhatIfPanel = ({ simParams, materials, setSimParams, scenarioId, lang='ko'
           </button>
         )}
       </div>
-      <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-        {ko ? '값을 바꾸면 분개·원장·아래 수익성 분석이 즉시 다시 계산됩니다. 이미 실행한 단계도 새 값으로 다시 평가되므로, 결정이 원가에 어떻게 흘러가는지 되짚어 볼 수 있습니다.'
-            : 'Changing a value recalculates the journals, the ledger and the analysis below straight away. Steps already run are re-valued too, so you can trace how a decision flows into cost.'}
+      <p className="text-[11px] text-slate-500 mb-3">
+        {ko ? '값을 바꾸면 분개·원장·아래 분석이 즉시 다시 계산됩니다.'
+            : 'Changing a value recalculates the journals, ledger and analysis below.'}
+        {' '}
+        <Detail label={ko?'이미 실행한 단계는?':'What about steps already run?'} lang={lang}>
+          {ko ? '새 값으로 다시 평가됩니다. 결정이 원가로 흘러가는 경로를 되짚어 볼 수 있습니다.'
+              : 'They are re-valued too, so you can trace how a decision flows into cost.'}
+        </Detail>
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
@@ -5787,8 +6090,8 @@ const VarianceAllocation = ({ simParams, materials, lang='ko' }) => {
   return (
     <Card title={`⚖️ ${ko ? '차이 배부 — 재고 vs 매출원가' : 'Variance allocation — inventory vs COGS'}`}>
       <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-        {ko ? '감사인이 가장 먼저 묻는 항목입니다. 기중에 쌓인 차이를 기말에 어디로 보냈는지에 따라 재고자산과 당기손익이 달라집니다.'
-            : 'The first thing an auditor asks. Where the period’s accumulated variance lands decides both closing inventory and current-period profit.'}
+        {ko ? '차이를 어디로 보내느냐에 따라 재고자산과 당기손익이 달라집니다 — 감사인이 가장 먼저 묻는 항목.'
+            : 'Where the variance lands decides closing inventory and current profit — the first thing an auditor asks.'}
       </p>
 
       {/* Waterfall */}
@@ -6015,7 +6318,7 @@ const CostModelTab = ({ lang='ko', simParams, materials }) => {
         </div>
         <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
           {ko
-            ? '※ 제품 Z 실제원가 3,900원/EA는 두 모델 모두 동일한 사실입니다. 차이 12,000원이 어디에 떨어지느냐(클래식=전액 P/L · ML=재고 4,000+COGS 8,000)만 다릅니다.'
+            ? '※ 실제원가 3,900원/EA는 두 모델이 같습니다. 차이 12,000원의 행선지만 다릅니다 — 클래식=전액 P/L · ML=재고 4,000 + COGS 8,000.'
             : '※ FG Z actual cost 3,900/EA is the same fact in both models. Only where the 12,000 variance lands differs (Classic = all P/L · ML = inventory 4,000 + COGS 8,000).'}
         </p>
       </div>
@@ -6059,10 +6362,15 @@ const CostModelTab = ({ lang='ko', simParams, materials }) => {
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
         <h3 className="text-sm font-semibold text-amber-800 mb-1.5">⚠️ {ko?'감사보고서 "하이브리드" 입장의 논리적 한계':'Logical limit of the audit report\'s "hybrid" stance'}</h3>
         <p className="text-xs text-amber-800 leading-relaxed">
-          {ko
-            ? '첨부 감사보고서는 원재료·반제품은 실제원가로 재평가(수동 가격변경)하면서 제품만 재평가하지 않는 중간 입장을 취합니다. 그러나 RM·SF 기말재고를 실제원가로 보정하기로 했다면(=재고 정확성·하위왜곡 방지를 인정했다면), 같은 논리로 FG 기말재고도 보정해야 합니다. FG만 표준가로 두는 "순수 클래식"이거나, 셋 다 일관되게 보정하는 "Material Ledger"이거나 — 둘 중 하나가 일관됩니다. ML은 RM→SF→FG 전 레벨을 하나의 마감(F28~F31)으로 일관되게 풀어, 이 모순 자체를 제거합니다.'
-            : 'The audit report revalues raw and semi-finished materials to actual (manual price change) but not finished goods. Yet if you accept revaluing RM·SF ending inventory (i.e., inventory accuracy and downstream distortion matter), the same logic demands revaluing FG too. Either "pure classic" (nothing revalued) or "Material Ledger" (all levels revalued consistently) is internally consistent. ML resolves RM→SF→FG in one period-end run (F28~F31), eliminating the contradiction.'}
+          {ko ? 'RM·SF는 실제원가로 재평가하면서 FG만 표준가로 두는 것은 논리적으로 일관되지 않습니다.'
+              : 'Revaluing RM and SF to actual while leaving FG at standard is not internally consistent.'}
         </p>
+        <div className="mt-1">
+          <Detail label={ko?'왜 그런가':'Why'} lang={lang}>
+            {ko ? 'RM·SF 기말재고를 실제로 보정하기로 했다면 재고 정확성을 인정한 것이므로, 같은 논리가 FG에도 적용됩니다. 일관된 선택지는 둘뿐입니다 — 아무것도 재평가하지 않는 «순수 클래식», 또는 전 레벨을 함께 보정하는 «Material Ledger». ML은 RM→SF→FG를 하나의 마감(F28~F31)으로 풀어 이 모순을 없앱니다.'
+                : 'Accepting a revaluation of RM and SF concedes that inventory accuracy matters, and the same logic reaches FG. Only two positions are consistent: pure classic (revalue nothing) or Material Ledger (revalue every level). ML settles RM→SF→FG in one period-end run (F28~F31), removing the contradiction.'}
+          </Detail>
+        </div>
       </div>
 
       {/* Where the variance actually lands — driven by the live parameters */}
@@ -6098,13 +6406,13 @@ const ModeBanner = ({ viewMode, lang='ko' }) => {
   if (viewMode === 'field') return (
     <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
       <span className="font-bold text-indigo-700">🧑‍🏭 {ko?'현업 모드':'Field mode'}</span>
-      <span className="text-indigo-700/75">{ko?'역할별로 내 업무만 빠르게. 전체 회계·전표는 우측 상단 ‘회계’로 전환하세요.':'Role-first — just your tasks. Switch to ‘Accounting’ (top-right) for the full ledger view.'}</span>
+      <span className="text-indigo-700/75">{ko?'역할별 내 업무 중심 · 전체 전표는 ‘회계’ 모드':'Your tasks by role · full ledger in ‘Accounting’'}</span>
     </div>
   );
   return (
     <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
       <span className="font-bold text-teal-700">🧮 {ko?'회계 모드':'Accounting mode'}</span>
-      <span className="text-teal-700/75">{ko?'모듈·전표·결산을 한 곳에서 전체로. 역할별 빠른 시작은 ‘현업’으로 전환하세요.':'Full module / journal / close view. Switch to ‘Field’ for role-based quick start.'}</span>
+      <span className="text-teal-700/75">{ko?'모듈·전표·결산 전체 보기 · 역할별 시작은 ‘현업’ 모드':'All modules, journals and close · role-based start in ‘Field’'}</span>
     </div>
   );
 };
@@ -6144,7 +6452,7 @@ const ScenarioPicker = ({ scenarioId, onApply, allSteps, lang='ko' }) => {
       <div className="flex items-baseline justify-between flex-wrap gap-1 mb-2">
         <h3 className="text-sm font-bold text-slate-800">🏭 {ko?'실습 사례 선택':'Choose a case'}</h3>
         <span className="text-[11px] text-slate-400">
-          {ko?'같은 프로세스를 다른 산업·원가 구조로 다시 실습합니다':'The same process, re-cast in another industry and cost structure'}
+          {ko?'같은 프로세스, 다른 산업·원가 구조':'Same process, different industry and cost structure'}
         </span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -6164,10 +6472,14 @@ const ScenarioPicker = ({ scenarioId, onApply, allSteps, lang='ko' }) => {
           );
         })}
       </div>
-      <p className="text-[10px] text-slate-400 mt-2">
-        {ko ? `현재 사례: ${cur.company.name} · 자재코드(FG001·SF001·RM001·RM002)는 모든 사례에서 동일하며, 자재명·단가·수량과 거래처가 바뀝니다.`
-            : `Active case: ${cur.company.name} — material codes stay the same across cases; names, prices, quantities and trading partners change.`}
-      </p>
+      <div className="text-[10px] text-slate-400 mt-2">
+        {ko ? `현재 사례: ${cur.company.name}` : `Active case: ${cur.company.name}`}
+        {' · '}
+        <Detail label={ko?'무엇이 바뀌나':'What changes'} lang={lang}>
+          {ko ? '자재코드(FG001·SF001·RM001·RM002)는 모든 사례에서 동일합니다. 자재명·단가·수량과 거래처가 바뀝니다.'
+              : 'Material codes stay the same across cases; names, prices, quantities and trading partners change.'}
+        </Detail>
+      </div>
     </div>
   );
 };
@@ -6301,8 +6613,8 @@ const KpiScorecard = ({ allSteps, simParams, materials, copa, lang='ko',
               </div>
               <p className="text-[10px] text-slate-400 mt-1">
                 {st.complete
-                  ? (ko ? '전 과정을 완주했습니다. 확인서를 발급할 수 있습니다.' : 'Full cycle complete — you can issue the record.')
-                  : (ko ? '지금까지 실행한 단계만 기록됩니다. 언제든 발급할 수 있습니다.' : 'Records only what you have run so far; you can issue it at any time.')}
+                  ? (ko ? '전 과정 완주 — 발급 가능' : 'Full cycle complete — ready to issue')
+                  : (ko ? '실행한 단계까지 기록 · 언제든 발급 가능' : 'Records what you have run · issue any time')}
               </p>
             </div>
             <input value={learnerName} onChange={e => setLearnerName(e.target.value)}
@@ -6854,6 +7166,7 @@ function App() {
     { id:'walkthrough', label:lang==='ko'?'워크스루':'Walkthrough', icon:'🔎' },
     { id:'problems', label:lang==='ko'?'문제은행':'Problem bank', icon:'📚' },
     { id:'instructor', label:lang==='ko'?'강사 뷰':'Instructor', icon:'🧑‍🏫' },
+    { id:'sapscreens', label:lang==='ko'?'SAP 화면 대조':'SAP screens', icon:'🖥' },
     { id:'sd',      label:tabLabels[4], icon:'💵' },
     { id:'ledger',  label:tabLabels[5], icon:'📒' },
     { id:'dryrun',  label:'Dryrun',     icon:'📊' },
@@ -6873,7 +7186,7 @@ function App() {
     { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
     { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
     { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
-    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params','problems','instructor'] },
+    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params','sapscreens','problems','instructor'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
   const ROLE_GROUPS = [
@@ -6883,7 +7196,7 @@ function App() {
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
     { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm','walkthrough'] },
-    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params','problems','instructor'] },
+    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params','sapscreens','problems','instructor'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
   const activeGroup = NAV_GROUPS.find(g => g.tabIds.includes(activeTab)) || NAV_GROUPS[0];
@@ -7080,6 +7393,7 @@ function App() {
         {activeTab==='sd' && <SDTab sdSteps={sdSteps} setSdSteps={setSdSteps} openPopup={openPopup} sdInv={sdInv} arBalance={arBalance} revenue={revenue} ficoDone={ficoDone} lang={lang} sdReturnSteps={sdReturnSteps} setSdReturnSteps={setSdReturnSteps} simParams={simParams} materials={materials} copa={copa} />}
         {activeTab==='ledger' && <LedgerTab allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang} onPrintAuditPack={printAuditPack} onExportSnapshot={exportSnapshot} onImportSnapshot={importSnapshot} />}
         {activeTab==='rcm' && <RcmTab allSteps={allSteps} setActiveTab={setActiveTab} lang={lang} />}
+        {activeTab==='sapscreens' && <SapScreenTab lang={lang} />}
         {activeTab==='instructor' && <InstructorTab lang={lang} />}
         {activeTab==='problems' && <ProblemBankTab scenarioId={scenarioId} simParams={simParams} materials={materials}
           onLoadProblem={loadProblem} lang={lang} />}

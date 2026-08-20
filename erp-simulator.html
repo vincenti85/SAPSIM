@@ -117,8 +117,6 @@
 <script type="text/babel">
 const { useState, useMemo, useRef, useEffect } = React;
 
-const APP_PIN = '0000'; // Default open-access PIN for self-directed learning
-
 /* =========================================================================
    DEFAULT MASTER DATA
    ========================================================================= */
@@ -6397,21 +6395,6 @@ const ROLE_GUIDE = {
    MODE BANNER + ROLE LAUNCHPAD  —  make 현업/회계 modes visibly distinct.
    현업 = role-tile home (task-first) · 회계 = module/journal home (data-first)
    ========================================================================= */
-const ModeBanner = ({ viewMode, lang='ko' }) => {
-  const ko = lang === 'ko';
-  if (viewMode === 'field') return (
-    <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="font-bold text-indigo-700">🧑‍🏭 {ko?'현업 모드':'Field mode'}</span>
-      <span className="text-indigo-700/75">{ko?'역할별 내 업무 중심 · 전체 전표는 ‘회계’ 모드':'Your tasks by role · full ledger in ‘Accounting’'}</span>
-    </div>
-  );
-  return (
-    <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="font-bold text-teal-700">🧮 {ko?'회계 모드':'Accounting mode'}</span>
-      <span className="text-teal-700/75">{ko?'모듈·전표·결산 전체 보기 · 역할별 시작은 ‘현업’ 모드':'All modules, journals and close · role-based start in ‘Field’'}</span>
-    </div>
-  );
-};
 /* =========================================================================
    KPI SCORECARD — turns the deterministic result into outcome metrics the
    learner is steering toward, plus goal badges. Shown on both home screens.
@@ -6735,27 +6718,12 @@ const AcctRoadmap = ({ lang='ko', setActiveTab }) => {
     </div>
   );
 };
-const RoleGuide = ({ tab, lang='ko' }) => {
-  const g = ROLE_GUIDE[tab];
-  if (!g) return null;
-  const ko = lang === 'ko';
-  return (
-    <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      <span className="font-semibold text-indigo-700">{g.icon} {ko?g.role.ko:g.role.en} {ko?'업무':'tasks'}</span>
-      <span className="text-slate-700">{ko?g.mine.ko:g.mine.en}</span>
-      <span className="text-slate-400">｜</span>
-      <span className="text-slate-500">{ko?g.others.ko:g.others.en}</span>
-    </div>
-  );
-};
-
 /* =========================================================================
    APP (GLOBAL STATE + DATA LINKAGE)
    ========================================================================= */
 function App() {
-  const [activeTab, setActiveTab] = useState('home_field');
+  const [activeTab, setActiveTab] = useState('home');
   const [lang, setLang] = useState('ko'); // 'ko' | 'en'
-  const [viewMode, setViewMode] = useState('field'); // 'field' (현업 역할별) | 'accounting' (회계 모듈별)
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id);
   const scenario = scenarioById(scenarioId);
   const company = scenario.company, vendor = scenario.vendor, customer = scenario.customer;
@@ -6765,41 +6733,6 @@ function App() {
   const [popupData, setPopupData] = useState(null);
 
   const openPopup = (data) => { setPopupData(data); setShowPopup(true); };
-
-  /* ---- PIN Gate ---- */
-  const [unlocked, setUnlocked] = useState(true); // Open access — no PIN gate
-  const [pinDigits, setPinDigits] = useState(['','','','']);
-  const [pinError, setPinError] = useState(false);
-  const pinContainerRef = useRef(null);
-
-  const focusPin = (i) => {
-    const inputs = pinContainerRef.current?.querySelectorAll('input');
-    inputs?.[i]?.focus();
-  };
-  const handlePinInput = (i, val) => {
-    if (!/^\d*$/.test(val)) return;
-    const next = [...pinDigits];
-    next[i] = val.slice(-1);
-    setPinDigits(next);
-    setPinError(false);
-    if (val && i < 3) focusPin(i + 1);
-    if (next.every(d => d !== '')) {
-      if (next.join('') === APP_PIN) {
-        setUnlocked(true);
-      } else {
-        setPinError(true);
-        setTimeout(() => { setPinDigits(['','','','']); setPinError(false); focusPin(0); }, 700);
-      }
-    }
-  };
-  const handlePinKeyDown = (i, e) => {
-    if (e.key === 'Backspace' && !pinDigits[i] && i > 0) focusPin(i - 1);
-  };
-
-  // Auto-focus first PIN input on page load
-  useEffect(() => {
-    if (!unlocked) focusPin(0);
-  }, []);
 
   /* ---- Story (presentation) mode ---- */
   const [storyMode, setStoryMode] = useState(false);
@@ -6855,7 +6788,7 @@ function App() {
     setSimParams(applyPatch(data.params, p.patch));
     clearAllSteps();
     setActiveProblem(p);
-    setActiveTab(viewMode === 'field' ? 'home_field' : 'home_acct');
+    setActiveTab('home');
   };
 
   /* ---- Snapshot: export/import the exact state behind a printed pack, so a
@@ -7152,50 +7085,35 @@ function App() {
 
   const tabLabels = T[lang].tabs;
   const tabs = [
-    { id:'params',  label:tabLabels[6], icon:'🎛️' },
-    { id:'master',  label:tabLabels[0], icon:'📋' },
-    { id:'mm',      label:tabLabels[1], icon:'🛒' },
-    { id:'pp',      label:tabLabels[2], icon:'🏭' },
-    { id:'fico',    label:tabLabels[3], icon:'🧮' },
-    { id:'overhead', label:lang==='ko'?'일반경비':'General/Overhead Expense', icon:'🧾' },
-    { id:'rcm',     label:lang==='ko'?'통제 매트릭스':'Control Matrix', icon:'🛡' },
+    { id:'home',     label:lang==='ko'?'홈':'Home', icon:'🏠' },
+    { id:'master',   label:tabLabels[0], icon:'📋' },
+    { id:'mm',       label:tabLabels[1], icon:'🛒' },
+    { id:'pp',       label:tabLabels[2], icon:'🏭' },
+    { id:'sd',       label:tabLabels[4], icon:'💵' },
+    { id:'fico',     label:tabLabels[3], icon:'🧮' },
+    { id:'overhead', label:lang==='ko'?'일반경비':'Overhead', icon:'🧾' },
+    { id:'copa',     label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
+    { id:'costmodel',label:lang==='ko'?'원가모델':'Costing Models', icon:'⚖️' },
+    { id:'ledger',   label:tabLabels[5], icon:'📒' },
+    { id:'rcm',      label:lang==='ko'?'통제 매트릭스':'Control Matrix', icon:'🛡' },
     { id:'walkthrough', label:lang==='ko'?'워크스루':'Walkthrough', icon:'🔎' },
+    { id:'flow',     label:lang==='ko'?'전체 흐름':'Flow', icon:'🔀' },
     { id:'problems', label:lang==='ko'?'문제은행':'Problem bank', icon:'📚' },
+    { id:'sapscreens', label:lang==='ko'?'SAP 화면':'SAP screens', icon:'🖥' },
+    { id:'script',   label:lang==='ko'?'시나리오':'Script', icon:'📝' },
+    { id:'dryrun',   label:lang==='ko'?'드라이런':'Dryrun', icon:'📊' },
+    { id:'params',   label:tabLabels[6], icon:'🎛️' },
     { id:'instructor', label:lang==='ko'?'강사 뷰':'Instructor', icon:'🧑‍🏫' },
-    { id:'sapscreens', label:lang==='ko'?'SAP 화면 대조':'SAP screens', icon:'🖥' },
-    { id:'sd',      label:tabLabels[4], icon:'💵' },
-    { id:'ledger',  label:tabLabels[5], icon:'📒' },
-    { id:'dryrun',  label:'Dryrun',     icon:'📊' },
-    { id:'flow',    label:'Flow',       icon:'🔀' },
-    { id:'script',  label:lang==='ko'?'시나리오':'Script', icon:'📝' },
-    { id:'copa',    label:lang==='ko'?'CO-PA 수익성':'CO-PA', icon:'📈' },
-    { id:'costmodel', label:lang==='ko'?'원가모델 비교':'Costing Models', icon:'⚖️' },
-    { id:'home_field', label:lang==='ko'?'홈':'Home', icon:'🏠' },
-    { id:'home_acct',  label:lang==='ko'?'시작 가이드':'Start Guide', icon:'🧭' },
   ];
 
-  // Ordered to match the 30-min story arc: start → master → business → finance
-  // → journal, with reference material (Tour/Intro) moved to the end.
-  const TAB_GROUPS = [
-    { id:'grp_home_acct',label:lang==='ko'?'시작':'Start', icon:'🧭', tabIds:['home_acct'] },
-    { id:'grp_ledger',   label:lang==='ko'?'마스터':'Master', icon:'📋', tabIds:['master'] },
-    { id:'grp_business', label:lang==='ko'?'거래':'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
-    { id:'grp_finance',  label:lang==='ko'?'재무':'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
-    { id:'grp_journal',  label:lang==='ko'?'분개장':'Ledger', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
-    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','problems','sapscreens','script','dryrun','params','instructor'] },
+  const NAV_GROUPS = [
+    { id:'grp_home',     label:lang==='ko'?'홈':'Home',      icon:'🏠', tabIds:['home'] },
+    { id:'grp_master',   label:lang==='ko'?'마스터':'Master', icon:'📋', tabIds:['master'] },
+    { id:'grp_business', label:lang==='ko'?'거래':'Business',icon:'🏢', tabIds:['mm','pp','sd'] },
+    { id:'grp_finance',  label:lang==='ko'?'재무':'Finance', icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
+    { id:'grp_ledger',   label:lang==='ko'?'분개장':'Ledger', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
+    { id:'grp_ref',      label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','problems','sapscreens','script','dryrun','params','instructor'] },
   ];
-  // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
-  const ROLE_GROUPS = [
-    { id:'role_home',    label:lang==='ko'?'홈':'Home',           icon:'🏠', tabIds:['home_field'] },
-    { id:'role_master',  label:lang==='ko'?'마스터':'Master',     icon:'🗂️', tabIds:['master'] },
-    { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
-    { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
-    { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
-    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing', icon:'📊', tabIds:['fico','costmodel','overhead','copa'] },
-    { id:'role_ledger',  label:lang==='ko'?'분개장':'Ledger',     icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
-    { id:'role_guide',   label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','problems','sapscreens','script','dryrun','params','instructor'] },
-  ];
-  const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
   const activeGroup = NAV_GROUPS.find(g => g.tabIds.includes(activeTab)) || NAV_GROUPS[0];
   const activeGroupTabs = activeGroup.tabIds.map(id => tabs.find(t => t.id === id)).filter(Boolean);
 
@@ -7210,7 +7128,7 @@ function App() {
       {storyMode && <StoryBar idx={storyIdx} setIdx={setStoryIdx} setActiveTab={setActiveTab} lang={lang}
         onExit={() => setStoryMode(false)} />}
 
-      <header className="bg-white border-b border-slate-200 text-slate-800">
+      <header className="bg-white border-b border-slate-200 text-slate-800 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-2xl">🏭</span>
@@ -7221,7 +7139,6 @@ function App() {
               </p>
             </div>
             <div className="ml-auto flex max-w-full flex-row flex-wrap items-center justify-end gap-2">
-              {/* Language */}
               <button
                 onClick={() => setLang(l => l === 'ko' ? 'en' : 'ko')}
                 className="flex items-center gap-1 px-3 py-1 rounded-full border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
@@ -7229,21 +7146,6 @@ function App() {
                 {lang === 'ko' ? '🇺🇸 EN' : '🇰🇷 KO'}
               </button>
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
-              {/* View Mode: 현업(Field) vs 회계(Accounting) */}
-              <div className="flex items-center rounded-full border border-slate-300 overflow-hidden text-xs font-semibold">
-                <button
-                  onClick={() => { setViewMode('field'); setActiveTab('home_field'); }}
-                  className={`px-3 py-1 transition-colors ${viewMode==='field' ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
-                  {lang==='ko' ? '🧑‍🏭 현업' : '🧑‍🏭 Field'}
-                </button>
-                <button
-                  onClick={() => { setViewMode('accounting'); setActiveTab('home_acct'); }}
-                  className={`px-3 py-1 transition-colors ${viewMode==='accounting' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
-                  {lang==='ko' ? '🧮 회계' : '🧮 Accounting'}
-                </button>
-              </div>
-              <div className="w-px h-5 bg-slate-200 mx-0.5" />
-              {/* Quiz mode — post the entry yourself before the answer shows */}
               <button
                   onClick={() => setQuizMode(q => !q)}
                   title={lang==='ko' ? '켜면 각 단계에서 분개를 직접 입력하고 채점받습니다'
@@ -7256,14 +7158,12 @@ function App() {
                     <span className="px-1 rounded bg-white/25 text-[10px]">{quizStats.perfect}/{quizStats.attempted}</span>}
                 </button>
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
-              {/* Story (presentation) mode — 30-minute one-story walkthrough */}
               <button
                   onClick={() => { setStoryMode(true); setStoryIdx(0); setActiveTab(STORY_CHAPTERS[0].tab); }}
                   className="flex items-center gap-1 px-3 py-1 rounded-full border border-indigo-300 bg-indigo-50 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition-colors">
                   🎤 {lang==='ko' ? '발표 모드 (30분)' : 'Present (30 min)'}
                 </button>
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
-              {/* Learning tools (Intro Tour / T-code Map / Lead Guide) — app-switcher style */}
               <LearningToolsSwitcher lang={lang} />
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
               <a
@@ -7274,7 +7174,7 @@ function App() {
               </a>
             </div>
           </div>
-          {/* Welcome bar (replaces former PIN gate) */}
+          {/* Welcome bar */}
           <div className="mt-2 flex items-center gap-2 border-b border-slate-100 pb-2">
             <span className="text-xs text-slate-500 flex items-center gap-1.5">
               <span>👋</span>
@@ -7285,20 +7185,20 @@ function App() {
           <ScenarioProgress ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps}
             activeTab={activeTab} setActiveTab={setActiveTab} lang={lang} />
           {/* Group Nav (Top Level) — mobile only; sm and up uses the left sidebar instead */}
-          <nav className="flex gap-1 mt-2 sm:hidden">
+          <nav className="flex gap-1 mt-2 sm:hidden overflow-x-auto">
             {NAV_GROUPS.map(g => (
               <button key={g.id}
                 onClick={() => setActiveTab(g.tabIds[0])}
-                className={`px-5 py-1.5 font-bold rounded-t transition-all tracking-wide
-                  ${g.id==='grp_ledger' || g.id==='role_ledger' ? 'text-[0.825rem]' : 'text-xs'}
+                className={`px-4 py-1.5 font-bold rounded-t transition-all tracking-wide whitespace-nowrap text-xs
                   ${activeGroup.id===g.id
-                    ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
+                    ? 'bg-indigo-500 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
                 {g.icon} {g.label}
               </button>
             ))}
           </nav>
           {/* Sub-Tab Nav */}
+          {activeGroupTabs.length > 1 && (
           <nav className="flex gap-1 flex-wrap border-t border-slate-100 pt-1">
             {activeGroupTabs.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -7308,20 +7208,20 @@ function App() {
               </button>
             ))}
           </nav>
+          )}
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 flex gap-4 items-start">
-        {/* Left slim sidebar (Group Nav) — sm and up only; mobile keeps the horizontal nav in the header */}
         <aside className="hidden sm:block w-24 shrink-0 py-5">
-          <nav className="flex flex-col gap-1 sticky top-4">
+          <nav className="flex flex-col gap-1 sticky top-20">
             {NAV_GROUPS.map(g => (
               <button key={g.id}
                 onClick={() => setActiveTab(g.tabIds[0])}
                 title={g.label}
                 className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-lg text-center transition-all
                   ${activeGroup.id===g.id
-                    ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
+                    ? 'bg-indigo-500 text-white shadow-sm'
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-400 hover:text-slate-800'}`}>
                 <span className="text-lg leading-none">{g.icon}</span>
                 <span className="text-[9px] font-semibold leading-tight">{g.label}</span>
@@ -7331,9 +7231,8 @@ function App() {
         </aside>
 
       <main className="flex-1 min-w-0 py-5 relative">
-        {(activeTab==='home_acct' || activeTab==='home_field') && <LandingHero lang={lang} />}
-        <ModeBanner viewMode={viewMode} lang={lang} />
-        {activeProblem && (activeTab==='home_acct' || activeTab==='home_field') && (
+        {activeTab==='home' && <LandingHero lang={lang} />}
+        {activeProblem && activeTab==='home' && (
           <div className="mb-4 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-xs font-bold text-indigo-800">
               📚 {lang==='ko'?'문제 실습 중':'Working a problem'} — {(lang==='ko'?activeProblem.ko:activeProblem.en)[0]}
@@ -7345,15 +7244,22 @@ function App() {
               className="text-[11px] text-indigo-600 hover:underline">{lang==='ko'?'문제 해제':'Clear'}</button>
           </div>
         )}
-        {(activeTab==='home_acct' || activeTab==='home_field') &&
+        {activeTab==='home' &&
           <ScenarioPicker scenarioId={scenarioId} onApply={applyScenario} allSteps={allSteps} lang={lang} />}
-        {(activeTab==='home_acct' || activeTab==='home_field') &&
+        {activeTab==='home' &&
           <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang}
             learnerName={learnerName} setLearnerName={setLearnerName} onPrintReport={printCompletionReport} quizStats={quizStats} />}
-        {viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
-        {viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
-          ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />}
-        {viewMode==='field' && activeTab!=='home_field' && <RoleGuide tab={activeTab} lang={lang} />}
+        {activeTab==='home' &&
+          <div className="mb-4">
+            <h2 className="text-lg font-extrabold text-slate-800 mb-3">{lang==='ko'?'역할별로 시작하기':'Start by role'}</h2>
+            <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
+              ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />
+          </div>}
+        {activeTab==='home' &&
+          <div className="mb-4">
+            <h2 className="text-lg font-extrabold text-slate-800 mb-3">{lang==='ko'?'결산 로드맵으로 보기':'View as close roadmap'}</h2>
+            <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />
+          </div>}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} simParams={simParams} lang={lang} />}
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} simParams={simParams} materials={materials} />}

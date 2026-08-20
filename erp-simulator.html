@@ -117,7 +117,7 @@
 <script type="text/babel">
 const { useState, useMemo, useRef, useEffect } = React;
 
-const APP_PIN = '__APP_PIN__';
+const APP_PIN = '0000'; // Default open-access PIN for self-directed learning
 
 /* =========================================================================
    DEFAULT MASTER DATA
@@ -2228,13 +2228,13 @@ const LEARNING_OUTCOMES = [
   { icon:'📈', ko:['수익성 보고서를 해석할 수 있다','표준마진과 실제마진이 벌어지는 이유를 설명'],
               en:['Interpret the profitability report','Explain why standard margin and actual margin diverge'] },
 ];
-const LandingHero = ({ lang, onFocusPin }) => {
+const LandingHero = ({ lang }) => {
   const ko = lang === 'ko';
   const storyMin = STORY_CHAPTERS.reduce((s, c) => s + c.min, 0);
   return (
     <div className="space-y-6">
       {/* Hero */}
-      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 sm:px-10 sm:py-10">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-6 py-8 sm:px-10 sm:py-10">
         <span className="inline-block text-[11px] font-bold tracking-[0.2em] text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">
           {ko ? 'ERP 프로세스 학습 시뮬레이터' : 'ERP PROCESS LEARNING SIMULATOR'}
         </span>
@@ -2243,15 +2243,11 @@ const LandingHero = ({ lang, onFocusPin }) => {
               : <>Follow one quarter of an auto-parts plant<br className="hidden sm:block" /> from purchasing to profit — <span className="text-indigo-600">entry by entry</span></>}
         </h2>
         <p className="mt-3 text-sm text-slate-600 leading-relaxed max-w-2xl">
-          {ko ? '구매 → 생산 → 원가결산 → 매출을 실제 분개와 함께 한 단계씩 실행합니다. 화면마다 «지금 할 일» 하나만 보여줍니다.'
-              : 'Run buy → make → close → sell one step at a time, each with its journal entry. Every screen shows just the one next action.'}
+          {ko ? '구매 → 생산 → 원가결산 → 매출을 실제 분개와 함께 한 단계씩 실행합니다. 화면마다 «지금 할 일» 하나만 보여줍니다. 지금 바로 시작하세요 — 별도 가입이나 비밀번호 없이 누구나 실습할 수 있습니다.'
+              : 'Run buy → make → close → sell one step at a time, each with its journal entry. Every screen shows just the one next action. Start right now — no sign-up or password needed.'}
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <IntroButton lang={lang} cta />
-          <button onClick={onFocusPin}
-            className="px-5 py-2.5 rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
-            🔐 {ko ? 'PIN 입력하고 실습 시작' : 'Enter PIN to practise'}
-          </button>
         </div>
         {/* Time badges */}
         <div className="mt-5 flex flex-wrap gap-2 text-[11px]">
@@ -2311,8 +2307,8 @@ const LandingHero = ({ lang, onFocusPin }) => {
         {ko ? '가상 회사·가상 거래로 만든 독립 교육용 도구입니다. 실제 회계기록이 아닙니다.'
             : 'An independent training tool using a fictitious company and transactions — not an accounting record.'}
         <Detail lang={lang}>
-          {ko ? 'SAP SE 및 Oracle과 제휴·후원·보증 관계가 없습니다. PIN은 실습 모드 접근용으로, 강사 또는 배포자에게 문의하세요.'
-              : 'Not affiliated with, sponsored by, or endorsed by SAP SE or Oracle. The PIN unlocks practice mode — ask your instructor or the distributor.'}
+          {ko ? 'SAP SE 및 Oracle과 제휴·후원·보증 관계가 없습니다. 본 도구는 누구나 자유롭게 사용할 수 있는 독립 교육용 시뮬레이터입니다.'
+              : 'Not affiliated with, sponsored by, or endorsed by SAP SE or Oracle. This is a free, independent educational simulator open to everyone.'}
         </Detail>
       </div>
     </div>
@@ -6771,7 +6767,7 @@ function App() {
   const openPopup = (data) => { setPopupData(data); setShowPopup(true); };
 
   /* ---- PIN Gate ---- */
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(true); // Open access — no PIN gate
   const [pinDigits, setPinDigits] = useState(['','','','']);
   const [pinError, setPinError] = useState(false);
   const pinContainerRef = useRef(null);
@@ -7181,12 +7177,12 @@ function App() {
   // Ordered to match the 30-min story arc: start → master → business → finance
   // → journal, with reference material (Tour/Intro) moved to the end.
   const TAB_GROUPS = [
-    { id:'grp_home_acct',label:lang==='ko'?'시작 가이드':'Start', icon:'🧭', tabIds:['home_acct'] },
-    { id:'grp_ledger',   label:'Ledger',   icon:'📋', tabIds:['master'] },
-    { id:'grp_business', label:'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
-    { id:'grp_finance',  label:'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
-    { id:'grp_journal',  label:lang==='ko'?'분개원장':'Journal', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
-    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','dryrun','script','params','sapscreens','problems','instructor'] },
+    { id:'grp_home_acct',label:lang==='ko'?'시작':'Start', icon:'🧭', tabIds:['home_acct'] },
+    { id:'grp_ledger',   label:lang==='ko'?'마스터':'Master', icon:'📋', tabIds:['master'] },
+    { id:'grp_business', label:lang==='ko'?'거래':'Business', icon:'🏢', tabIds:['mm','pp','sd'] },
+    { id:'grp_finance',  label:lang==='ko'?'재무':'Finance',  icon:'💹', tabIds:['fico','overhead','copa','costmodel'] },
+    { id:'grp_journal',  label:lang==='ko'?'분개장':'Ledger', icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
+    { id:'grp_tour',     label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','problems','sapscreens','script','dryrun','params','instructor'] },
   ];
   // 현업 모드 — 역할(Role) 기준 재배치 (SAP Fiori 역할기반 원칙). 각 탭 1회 배정.
   const ROLE_GROUPS = [
@@ -7195,8 +7191,9 @@ function App() {
     { id:'role_buy',     label:lang==='ko'?'구매':'Purchasing',   icon:'🛒', tabIds:['mm'] },
     { id:'role_prod',    label:lang==='ko'?'생산':'Production',   icon:'🏭', tabIds:['pp'] },
     { id:'role_sales',   label:lang==='ko'?'영업':'Sales',        icon:'💵', tabIds:['sd'] },
-    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing & Close', icon:'📊', tabIds:['fico','costmodel','overhead','copa','ledger','rcm','walkthrough'] },
-    { id:'role_guide',   label:lang==='ko'?'가이드':'Guide',      icon:'🗺️', tabIds:['flow','dryrun','script','params','sapscreens','problems','instructor'] },
+    { id:'role_costing', label:lang==='ko'?'원가·결산':'Costing', icon:'📊', tabIds:['fico','costmodel','overhead','copa'] },
+    { id:'role_ledger',  label:lang==='ko'?'분개장':'Ledger',     icon:'📒', tabIds:['ledger','rcm','walkthrough'] },
+    { id:'role_guide',   label:lang==='ko'?'참고자료':'Reference', icon:'🗺️', tabIds:['flow','problems','sapscreens','script','dryrun','params','instructor'] },
   ];
   const NAV_GROUPS = viewMode === 'field' ? ROLE_GROUPS : TAB_GROUPS;
   const activeGroup = NAV_GROUPS.find(g => g.tabIds.includes(activeTab)) || NAV_GROUPS[0];
@@ -7247,8 +7244,7 @@ function App() {
               </div>
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
               {/* Quiz mode — post the entry yourself before the answer shows */}
-              {unlocked && (
-                <button
+              <button
                   onClick={() => setQuizMode(q => !q)}
                   title={lang==='ko' ? '켜면 각 단계에서 분개를 직접 입력하고 채점받습니다'
                                      : 'When on, you post each entry yourself and get graded'}
@@ -7259,17 +7255,14 @@ function App() {
                   {quizMode && quizStats.attempted > 0 &&
                     <span className="px-1 rounded bg-white/25 text-[10px]">{quizStats.perfect}/{quizStats.attempted}</span>}
                 </button>
-              )}
-              {unlocked && <div className="w-px h-5 bg-slate-200 mx-0.5" />}
+              <div className="w-px h-5 bg-slate-200 mx-0.5" />
               {/* Story (presentation) mode — 30-minute one-story walkthrough */}
-              {unlocked && (
-                <button
+              <button
                   onClick={() => { setStoryMode(true); setStoryIdx(0); setActiveTab(STORY_CHAPTERS[0].tab); }}
                   className="flex items-center gap-1 px-3 py-1 rounded-full border border-indigo-300 bg-indigo-50 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition-colors">
                   🎤 {lang==='ko' ? '발표 모드 (30분)' : 'Present (30 min)'}
                 </button>
-              )}
-              {unlocked && <div className="w-px h-5 bg-slate-200 mx-0.5" />}
+              <div className="w-px h-5 bg-slate-200 mx-0.5" />
               {/* Learning tools (Intro Tour / T-code Map / Lead Guide) — app-switcher style */}
               <LearningToolsSwitcher lang={lang} />
               <div className="w-px h-5 bg-slate-200 mx-0.5" />
@@ -7281,45 +7274,24 @@ function App() {
               </a>
             </div>
           </div>
-          {/* PIN Row (above Group Nav) */}
+          {/* Welcome bar (replaces former PIN gate) */}
           <div className="mt-2 flex items-center gap-2 border-b border-slate-100 pb-2">
-            {unlocked ? (
-              <span className="text-xs text-green-600 flex items-center gap-1.5">
-                <span>✅</span>
-                <span>{lang==='ko' ? '인증 완료 — 전체 메뉴 활성화' : 'Authenticated — Full access'}</span>
-              </span>
-            ) : (
-              <div className="flex items-center gap-2" ref={pinContainerRef}>
-                <span className="text-xs text-slate-500">🔐 {lang==='ko' ? '실습 모드 잠금 해제' : 'Unlock practice mode'}</span>
-                {pinDigits.map((d, i) => (
-                  <input key={i} type="password" inputMode="numeric" maxLength={1} value={d}
-                    autoFocus={i === 0}
-                    onChange={e => handlePinInput(i, e.target.value)}
-                    onKeyDown={e => handlePinKeyDown(i, e)}
-                    className={`w-8 h-8 text-center text-sm font-bold rounded border-2 bg-white text-slate-800 outline-none transition-colors
-                      ${pinError ? 'border-red-400 bg-red-50 animate-pulse' : 'border-slate-300 focus:border-indigo-500'}`}
-                  />
-                ))}
-                <span className="text-xs text-slate-400">{lang==='ko' ? '강사에게 받은 4자리 PIN' : '4-digit PIN from your instructor'}</span>
-                {pinError && <span className="text-xs text-red-500 font-semibold">❌</span>}
-              </div>
-            )}
+            <span className="text-xs text-slate-500 flex items-center gap-1.5">
+              <span>👋</span>
+              <span>{lang==='ko' ? '누구나 바로 실습할 수 있습니다 — 메뉴에서 시작하세요' : 'Open access — pick a menu to start'}</span>
+            </span>
           </div>
           {/* Scenario Progress (global stepper) */}
-          {unlocked && (
-            <ScenarioProgress ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps}
-              activeTab={activeTab} setActiveTab={setActiveTab} lang={lang} />
-          )}
+          <ScenarioProgress ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps}
+            activeTab={activeTab} setActiveTab={setActiveTab} lang={lang} />
           {/* Group Nav (Top Level) — mobile only; sm and up uses the left sidebar instead */}
           <nav className="flex gap-1 mt-2 sm:hidden">
             {NAV_GROUPS.map(g => (
               <button key={g.id}
-                onClick={() => unlocked && setActiveTab(g.tabIds[0])}
-                disabled={!unlocked}
+                onClick={() => setActiveTab(g.tabIds[0])}
                 className={`px-5 py-1.5 font-bold rounded-t transition-all tracking-wide
-                  ${g.id==='grp_ledger' ? 'text-[0.825rem]' : 'text-xs'}
-                  ${!unlocked ? 'opacity-40 cursor-not-allowed' : ''}
-                  ${activeGroup.id===g.id && unlocked
+                  ${g.id==='grp_ledger' || g.id==='role_ledger' ? 'text-[0.825rem]' : 'text-xs'}
+                  ${activeGroup.id===g.id
                     ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
                 {g.icon} {g.label}
@@ -7345,12 +7317,10 @@ function App() {
           <nav className="flex flex-col gap-1 sticky top-4">
             {NAV_GROUPS.map(g => (
               <button key={g.id}
-                onClick={() => unlocked && setActiveTab(g.tabIds[0])}
-                disabled={!unlocked}
+                onClick={() => setActiveTab(g.tabIds[0])}
                 title={g.label}
                 className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-lg text-center transition-all
-                  ${!unlocked ? 'opacity-40 cursor-not-allowed' : ''}
-                  ${activeGroup.id===g.id && unlocked
+                  ${activeGroup.id===g.id
                     ? (viewMode==='field' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-teal-600 text-white shadow-sm')
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-400 hover:text-slate-800'}`}>
                 <span className="text-lg leading-none">{g.icon}</span>
@@ -7361,9 +7331,9 @@ function App() {
         </aside>
 
       <main className="flex-1 min-w-0 py-5 relative">
-        {!unlocked && <LandingHero lang={lang} onFocusPin={() => focusPin(0)} />}
-        {unlocked && <ModeBanner viewMode={viewMode} lang={lang} />}
-        {unlocked && activeProblem && (activeTab==='home_acct' || activeTab==='home_field') && (
+        {(activeTab==='home_acct' || activeTab==='home_field') && <LandingHero lang={lang} />}
+        <ModeBanner viewMode={viewMode} lang={lang} />
+        {activeProblem && (activeTab==='home_acct' || activeTab==='home_field') && (
           <div className="mb-4 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-xs font-bold text-indigo-800">
               📚 {lang==='ko'?'문제 실습 중':'Working a problem'} — {(lang==='ko'?activeProblem.ko:activeProblem.en)[0]}
@@ -7375,15 +7345,15 @@ function App() {
               className="text-[11px] text-indigo-600 hover:underline">{lang==='ko'?'문제 해제':'Clear'}</button>
           </div>
         )}
-        {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
+        {(activeTab==='home_acct' || activeTab==='home_field') &&
           <ScenarioPicker scenarioId={scenarioId} onApply={applyScenario} allSteps={allSteps} lang={lang} />}
-        {unlocked && (activeTab==='home_acct' || activeTab==='home_field') &&
+        {(activeTab==='home_acct' || activeTab==='home_field') &&
           <KpiScorecard allSteps={allSteps} simParams={simParams} materials={materials} copa={copa} lang={lang}
             learnerName={learnerName} setLearnerName={setLearnerName} onPrintReport={printCompletionReport} quizStats={quizStats} />}
-        {unlocked && viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
-        {unlocked && viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
+        {viewMode==='accounting' && activeTab==='home_acct' && <AcctRoadmap lang={lang} setActiveTab={setActiveTab} />}
+        {viewMode==='field' && activeTab==='home_field' && <RoleLaunchpad lang={lang} setActiveTab={setActiveTab}
           ckSteps={ckSteps} mmSteps={mmSteps} ppSteps={ppSteps} ficoSteps={ficoSteps} sdSteps={sdSteps} />}
-        {unlocked && viewMode==='field' && activeTab!=='home_field' && <RoleGuide tab={activeTab} lang={lang} />}
+        {viewMode==='field' && activeTab!=='home_field' && <RoleGuide tab={activeTab} lang={lang} />}
         {activeTab==='params'  && <ParametersTab simParams={simParams} setSimParams={setSimParams} materials={materials} lang={lang} />}
         {activeTab==='master' && <MasterTab materials={materials} setMaterials={setMaterials} ckSteps={ckSteps} setCkSteps={setCkSteps} openPopup={openPopup} simParams={simParams} lang={lang} />}
         {activeTab==='mm' && <MMTab mmSteps={mmSteps} setMmSteps={setMmSteps} openPopup={openPopup} mmInv={mmInv} apBalance={apBalance} priceVar={priceVar} lang={lang} mmReturnSteps={mmReturnSteps} setMmReturnSteps={setMmReturnSteps} miSteps={miSteps} setMiSteps={setMiSteps} sdebSteps={sdebSteps} setSdebSteps={setSdebSteps} simParams={simParams} materials={materials} />}

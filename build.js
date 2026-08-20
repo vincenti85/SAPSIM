@@ -1,14 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// Support both PIN_Number and PIN_NUMBER env var names
-const pin = process.env.PIN_Number || process.env.PIN_NUMBER;
+// PIN is optional — default '0000' for open-access self-directed learning
+const pin = process.env.PIN_Number || process.env.PIN_NUMBER || '0000';
 
-if (!pin) {
-  console.error('BUILD ERROR: Neither PIN_Number nor PIN_NUMBER environment variable is set in Vercel.');
-  console.error('Go to Vercel Dashboard → Settings → Environment Variables and verify the variable name.');
-  process.exit(1);
-}
 if (!/^\d{4}$/.test(pin)) {
   console.error(`BUILD ERROR: PIN value "${pin}" is not a 4-digit number.`);
   process.exit(1);
